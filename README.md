@@ -12,6 +12,9 @@ didn't find anything.  There are plenty for a desktop box, but nothing
 that I like for a server to show via web.  The home page of
 http://repo.or.cz/ gave me the inspiration and CSS magic.
 
+Like the original xdu (still my favourite for desktop use), you have
+to run du yourself, keeping the output in a file.
+
 Installation
 -------------
 
@@ -29,11 +32,13 @@ On a Debian based system, bottle.py is found in the pacakge python-bottle.
 Usage
 -----
 
-$ du >/tmp/du.out
+<pre>
+$ du / >/tmp/du.out
 $ python dircloud.py /tmp/du.out
  Bottle server starting up (using WSGIRefServer())...
  Listening on http://localhost:2010/
  Use Ctrl-C to quit.
+</pre>
 
 Point your browser to http://localhost:2010/
 

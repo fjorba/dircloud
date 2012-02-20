@@ -71,7 +71,7 @@ read_from_disk = '!'
 
 
 @route('/')
-@route(':dirpath#.+#')
+@route('/:dirpath#.+#')
 def dircloud(dirpath='/'):
     global du
     du = read_du_file_maybe(settings['filename'])

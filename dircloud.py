@@ -15,7 +15,7 @@ import re
 import fnmatch
 from bottle import route, run, debug, request, response, static_file
 
-if sys.version.startswith('2'):
+if sys.version_info[0] == 2:
     import commands as subprocess
 else:
     import subprocess

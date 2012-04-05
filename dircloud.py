@@ -144,23 +144,7 @@ def robots():
 
 @route('/credits')
 def credits_page():
-    html_head = '''<html>
- <head>
-  <title>%(name)s %(dirpath)s</title>
- </head>
- %(css)s
- <body>
-  <div class="page_header">
-   <a title="logo" href="%(logo_href)s"><img src="%(logo_img)s" alt="logo" class="logo"/></a>
-   <a href="/">%(name)s</a> of %(breadcrumb)s
-  </div>
-''' % ({'name': 'Credits',
-        'dirpath': 'credits',
-        'breadcrumb': 'dircloud',
-        'css': get_css(),
-        'logo_href': settings['logo_href'],
-        'logo_img': settings['logo_img'],
-        })
+    head = html_head('Credits', 'credits', 'dircloud')
 
     body = []
     body.append('<h1>Credits</h1>')
@@ -185,7 +169,7 @@ def credits_page():
 
     footer = '\n</body>\n\n</html>\n'
 
-    page = html_head + '\n'.join(body) + footer
+    page = head + '\n'.join(body) + footer
     return page
 
 
@@ -362,23 +346,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
                    })
     breadcrumb = sep.join(crumbs)
 
-    html_head = '''<html>
- <head>
-  <title>%(name)s %(dirpath)s</title>
- </head>
- %(css)s
- <body>
-  <div class="page_header">
-   <a title="logo" href="%(logo_href)s"><img src="%(logo_img)s" alt="logo" class="logo"/></a>
-   <a href="/">%(name)s</a> of %(breadcrumb)s
-  </div>
-''' % ({'name': 'Dircloud',
-        'dirpath': dirpath,
-        'breadcrumb': breadcrumb,
-        'css': get_css(),
-        'logo_href': settings['logo_href'],
-        'logo_img': settings['logo_img'],
-        })
+    head = html_head('Dircloud', dirpath, breadcrumb)
 
     form = '''
 <form method="get" action="/search" enctype="application/x-www-form-urlencoded">
@@ -396,7 +364,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
     footer += '\n</body>\n'
     footer += '\n</html>\n'
 
-    return '\n<p>'.join((html_head, header, form, body, footer))
+    return '\n<p>'.join((head, header, form, body, footer))
 
 
 def locate2html(filenames, maxresults=1000):
@@ -544,6 +512,26 @@ def human_readable(size, format='%.1f'):
         size /= 1024.
 
     return (format + ' %s') % (size, units[i-1])
+
+
+def html_head(name, dirpath, breadcrumb):
+   return '''<html>
+ <head>
+  <title>%(name)s %(dirpath)s</title>
+ </head>
+ %(css)s
+ <body>
+  <div class="page_header">
+   <a title="logo" href="%(logo_href)s"><img src="%(logo_img)s" alt="logo" class="logo"/></a>
+   <a href="/">%(name)s</a> of %(breadcrumb)s
+  </div>
+''' % ({'name': name,
+        'dirpath': dirpath,
+        'breadcrumb': breadcrumb,
+        'css': get_css(),
+        'logo_href': settings['logo_href'],
+        'logo_img': settings['logo_img'],
+        })
 
 
 def get_css():

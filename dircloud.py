@@ -143,7 +143,7 @@ def robots():
     return settings['robots.txt']
 
 @route('/credits')
-def credits():
+def credits_page():
     html_head = '''<html>
  <head>
   <title>%(name)s %(dirpath)s</title>
@@ -313,7 +313,7 @@ def make_cloud(dirpath, directory):
     for name in names:
         filesize = directory[name]
         if min(sizes) == max(sizes):
-            fontsize = fontrange / 2
+            fontsize = fontrange // 2
         else:
             for fontsize in range(len(sizeranges)):
                 if sizeranges[fontsize] >= filesize:
@@ -399,8 +399,8 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
     return '\n<p>'.join((html_head, header, form, body, footer))
 
 
-def locate2html(str, maxresults=1000):
-    fullpaths = str.split('\n')
+def locate2html(filenames, maxresults=1000):
+    fullpaths = filenames.split('\n')
     links = []
     for fullpath in fullpaths[:maxresults]:
         (dirname, filename) = os.path.split(fullpath)

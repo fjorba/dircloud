@@ -409,7 +409,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
     footer += '\n</body>\n'
     footer += '\n</html>\n'
 
-    return '\n<p>'.join((head, header, form, body, footer))
+    return '\n<p>'.join((head, form, header, body, footer))
 
 
 def locate2html(filenames, maxresults=1000):

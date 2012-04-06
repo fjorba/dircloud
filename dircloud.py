@@ -718,6 +718,10 @@ span.filesize a { text-decoration: none; }
 
 
 if __name__ == '__main__':
+    if 'DIRCLOUD_DEBUG' in os.environ:
+        settings['verbose'] = True
+        settings['debug'] = True
+        settings['reloader'] = True
     debug(settings['debug'])
     if len(sys.argv) > 1:
         settings['filename'] = sys.argv[1]

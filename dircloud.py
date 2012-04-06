@@ -95,11 +95,11 @@ def dircloud(dirpath='/'):
             footer = read_file_if_exists(dirname, settings['ReadmeName'])
         else:
             (path, filename) = os.path.split(dirname)
-            if filename.endswith('.info'): # TODO: splitext and ['mimetypes']
-                guessmime = False # Please treat it as text/plain
+            (basename, ext) = os.path.splitext(filename)
+            if ext in settings['mimetypes']:
+                return static_file(filename, root=path, mimetype=settings['mimetypes'][ext])
             else:
-                guessmime = True
-            return static_file(filename, root=path, guessmime=guessmime)
+                return static_file(filename, root=path)
 
     cloud = make_cloud(dirpath, directory)
     page = make_html_page(dirpath=dirpath, header=header,

@@ -368,14 +368,14 @@ def make_cloud(dirpath, directory):
 def make_html_page(dirpath='', header='', search='', body='', footer=''):
 
     href = sep
-    crumbs = []
+    breadcrumbs = []
     parents = dirpath.split(sep)[:-1]
     for parent in parents:
         href += parent + sep
-        crumbs.append('<a href="%(href)s">%(parent)s</a>' %
-                      {'href': href,
-                       'parent': parent,
-                       })
+        breadcrumbs.append('<a href="%(href)s">%(parent)s</a>' %
+                           {'href': href,
+                            'parent': parent,
+                            })
     if settings['verbose']:
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
@@ -385,12 +385,12 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
             dirpath = sep
     else:
         filesize = du[dirpath.rstrip(read_from_disk)]
-    crumbs.append(' <span class="filesize"><a href="%(href)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>' %
-                  {'href': read_from_disk,
-                   'read_from_disk_tip': settings['read_from_disk_tip'],
-                   'filesize': human_readable(filesize),
-                   })
-    breadcrumb = sep.join(crumbs)
+    breadcrumbs.append(' <span class="filesize"><a href="%(href)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>' %
+                       {'href': read_from_disk,
+                        'read_from_disk_tip': settings['read_from_disk_tip'],
+                        'filesize': human_readable(filesize),
+                        })
+    breadcrumb = sep.join(breadcrumbs)
 
     head = html_head('Dircloud', dirpath, breadcrumb)
 

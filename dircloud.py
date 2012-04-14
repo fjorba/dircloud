@@ -128,7 +128,11 @@ def search():
             result = dico_match(q)
             results += dico_match2html(result)
     else:
-        cmd = '/usr/bin/locate %s' % (q)
+        if match == 'on':
+            opt = '--regex'
+        else:
+            opt = ''
+        cmd = '/usr/bin/locate %s %s' % (opt, q)
         out = subprocess.getoutput(cmd)
         results = locate2html(out)
 

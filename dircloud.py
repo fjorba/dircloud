@@ -145,7 +145,7 @@ def robots():
 
 @route('/credits')
 def credits_page():
-    head = html_head('Credits', 'credits', 'dircloud')
+    head = html_head('Credits', 'dircloud', 'dircloud')
 
     body = []
     body.append('<h1>Credits</h1>')
@@ -176,7 +176,7 @@ def credits_page():
 
 @route('/statistics')
 def statistics_page():
-    head = html_head('Statistics', 'statistics', 'dircloud')
+    head = html_head('Statistics', 'dircloud', 'dircloud')
 
     body = []
     body.append('<p />')
@@ -563,7 +563,7 @@ def human_readable(size, format='%.1f'):
 def html_head(name, dirpath, breadcrumb):
    return '''<html>
  <head>
-  <title>%(name)s %(dirpath)s</title>
+  <title>%(name)s of %(dirpath)s</title>
  </head>
  %(css)s
  <body>

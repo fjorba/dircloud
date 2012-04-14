@@ -196,7 +196,8 @@ def statistics_page():
             line = lines.pop(0)
             if line:
                 details = line.split()
-                body.append('  <li>%s %s</li>' % (details[1], details[0]))
+                if details[1].isdigit():
+                    body.append('  <li>%s %s</li>' % (details[1], details[0]))
         body.append(' </ul>')
     elif settings['search_client'] == 'locate':
         cmd = '/usr/bin/locate --statistics'

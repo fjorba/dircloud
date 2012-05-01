@@ -82,7 +82,7 @@ def dircloud(dirpath='/'):
 
     directory = {}
     if not dirpath.endswith(read_from_disk):
-        directory = get_directory_from_du(dirpath)
+        directory = get_directory_from_tree(du, dirpath)
     if directory:
         entries = len(directory)
         total_size = sum(directory.values())
@@ -257,25 +257,24 @@ def read_du_file_maybe(filename):
     return du
 
 
-def get_directory_from_du(dirpath):
+def get_directory_from_tree(tree, dirpath):
     '''Return a dict with the first-level names that start with
     dirpath as key, and filesize as value'''
 
-    global du
     if dirpath in ('', '/'):
         pos = 0
-        dirnames = [dirname for dirname in du if dirname.count(sep) == 1]
+        dirnames = [dirname for dirname in tree if dirname.count(sep) == 1]
     else:
         pos = len(dirpath)
         n = dirpath.count(sep) + 1
-        dirnames = [dirname for dirname in du if (dirname.startswith(dirpath)
+        dirnames = [dirname for dirname in tree if (dirname.startswith(dirpath)
                                                   and dirname.count(sep) <= n)]
         if dirpath in dirnames:
             dirnames.remove(dirpath)
 
     directory = {}
     for dirname in dirnames:
-        directory[dirname[pos:]] = du[dirname]
+        directory[dirname[pos:]] = tree[dirname]
 
     return directory
 
@@ -423,7 +422,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
     if settings['verbose']:
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
-        directory = get_directory_from_du('/')
+        directory = get_directory_from_tree(du, '/')
         filesize = sum(directory.values())
         if dirpath in ('', read_from_disk):
             dirpath = sep

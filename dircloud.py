@@ -85,7 +85,7 @@ def dircloud(dirpath='/'):
         directory = get_directory_from_tree(du, dirpath)
     if directory:
         entries = len(directory)
-        total_size = sum(directory.values())
+        total_size = sum([directory[name][0] for name in directory])
         header = '<div class="stale_info">%s directories, <a href="/dircloud=statistics">%s</a></div>' % (entries, human_readable(total_size))
         footer = ''
     else:
@@ -268,7 +268,11 @@ def read_du_file_maybe(filename):
             fields = line.split('\t')
             size = int(fields[0]) * du_units
             name = fields[-1].lstrip('./').replace('\n', sep)
-            du[name] = size
+            if len(fields) == 3:
+                mtime = fields[1]	# du --time parameter
+            else:
+                mtime = name
+            du[name] = [size, mtime]
         f.close()
         if sep in du:
             del du[sep]
@@ -316,20 +320,23 @@ def read_directory_from_disk(dirname):
             continue
         fullpath = dirname + filename
         size = os.path.getsize(fullpath)
+        mtime = os.path.getmtime(fullpath)
+        localtime = time.localtime(mtime)
+        mtime = time.strftime('%Y-%m-%d %H:%M', localtime)
         dirpath = fullpath[len(settings['DocumentRoot']):]
         if os.path.isdir(fullpath):
             filename += sep
             dirpath += sep
             if dirpath in du:
                 # We prefer the size of the contents, no the direntry
-                size = du[dirpath]
-        directory[filename] = size
+                size = du[dirpath][0]
+        directory[filename] = [size, mtime]
         if settings['update_du_with_read_from_disk']:
             if not dirpath in du:
                 if settings['verbose']:
                     print >>sys.stderr,'updating du[%s] with size %s' % (dirpath,
                                                                          size)
-                du[dirpath] = size
+                du[dirpath] = [size, mtime]
 
     return directory
 
@@ -355,10 +362,15 @@ def read_df_output():
     '''Calculate free and used disc space'''
 
     cmd = 'LC_ALL=C /bin/df -k'
+    title = {
+        'size/': 'Total space, used and free',
+        'used/': 'Used space',
+        'available/': 'Free space available',
+        }
     df = {
-        'size/': 0,
-        'used/': 0,
-        'available/': 0,
+        'size/': [0, title['size/']],
+        'used/': [0, title['used/']],
+        'available/': [0, title['available/']],
         }
     out = subprocess.getoutput(cmd)
     lines = out.split('\n')
@@ -368,12 +380,12 @@ def read_df_output():
             size = int(size) * 1024
             used = int(used) * 1024
             available = int(available) * 1024
-            df['size%s/' % (mounted_on)] = size
-            df['used%s/' % (mounted_on)] = used
-            df['available%s/' % (mounted_on)] = available
-            df['size/'] += size
-            df['used/'] += used
-            df['available/'] += available
+            df['size%s/' % (mounted_on)] = [size, title['size/']]
+            df['used%s/' % (mounted_on)] = [used, title['used/']]
+            df['available%s/' % (mounted_on)] = [available, title['available/']]
+            df['size/'][0] += size
+            df['used/'][0] += used
+            df['available/'][0] += available
 
     return df
 
@@ -393,7 +405,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     # Get the size range of our directory
     #fontsizes = ['tagcloud%d' % (i) for i in range(10)]
     fontrange = 10
-    sizes = list(directory.values())
+    sizes = [directory[name][0] for name in directory]
     floor = min(sizes)
     ceiling = max(sizes)
     increment = (ceiling - floor) / fontrange
@@ -405,7 +417,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     cloud.append('<div id="htmltagcloud">')
 
     for name in names:
-        filesize = directory[name]
+        (filesize, mtime) = directory[name]
         if strip_trailing_slash:
             name = name.rstrip('/')
         if min(sizes) == max(sizes):
@@ -416,7 +428,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
                     break
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsize,
-                       'title': os.path.join(dirpath, name),
+                       'title': mtime,
                        'href': prefix + name,
                        'name': name.rstrip(sep),
                        'read_from_disk': read_from_disk,
@@ -447,11 +459,11 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
         directory = get_directory_from_tree(du, '/')
-        filesize = sum(directory.values())
+        filesize = sum([directory[name][0] for name in directory])
         if dirpath in ('', read_from_disk):
             dirpath = sep
     else:
-        filesize = du[dirpath.rstrip(read_from_disk)]
+        filesize = du[dirpath.rstrip(read_from_disk)][0]
     breadcrumbs.append(' <span class="filesize"><a href="%(href)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>' %
                        {'href': read_from_disk,
                         'read_from_disk_tip': settings['read_from_disk_tip'],

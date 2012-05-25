@@ -426,10 +426,15 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
             for fontsize in range(len(sizeranges)):
                 if sizeranges[fontsize] >= filesize:
                     break
-        cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
+        if name.endswith(sep):
+            style = ''
+        else:
+            style = 'style="font-style: italic;"'
+        cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsize,
                        'title': mtime,
                        'href': prefix + name,
+                       'style': style,
                        'name': name.rstrip(sep),
                        'read_from_disk': read_from_disk,
                        'read_from_disk_tip': settings['read_from_disk_tip'],

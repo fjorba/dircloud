@@ -434,14 +434,18 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
                     break
         if name.endswith(sep):
             style = ''
+            name_stripped = name.rstrip(sep)
+            if not name_stripped:
+                name_stripped = sep
         else:
             style = 'style="font-style: italic;"'
+            name_stripped = name
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsize,
                        'title': mtime,
                        'href': prefix + name,
                        'style': style,
-                       'name': name.rstrip(sep),
+                       'name': name_stripped,
                        'read_from_disk': read_from_disk,
                        'read_from_disk_tip': settings['read_from_disk_tip'],
                        'filesize': human_readable(filesize).replace(' ',

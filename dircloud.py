@@ -358,7 +358,7 @@ def read_file_if_exists(dirpath, filename):
             except IOError:
                 contents = 'Cannot read %s' % (filename)
         else:
-            contents = '%s not found' % (filename)
+            contents = ''
     else:
         contents = ''
     return contents
@@ -409,7 +409,6 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         names.sort()
 
     # Get the size range of our directory
-    #fontsizes = ['tagcloud%d' % (i) for i in range(10)]
     fontrange = 10
     sizes = [directory[name][0] for name in directory]
     floor = min(sizes)

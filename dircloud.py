@@ -13,6 +13,7 @@ import os
 import time
 import re
 import fnmatch
+import locale
 from bottle import route, run, debug, request, response, static_file
 
 if sys.version_info[0] == 2:
@@ -69,6 +70,7 @@ du = {}
 du_last_read = 0
 read_from_disk = '!'
 df = []
+locale.setlocale(locale.LC_ALL, '')
 
 
 @route('/')
@@ -212,7 +214,8 @@ def statistics_page():
             if line:
                 details = line.split()
                 if details[1].isdigit():
-                    body.append('  <li>%s %s</li>' % (details[1], details[0]))
+                    n = locale.format('%d', int(details[1]), grouping=True)
+                    body.append('  <li>%s %s</li>' % (n, details[0]))
         body.append(' </ul>')
     elif settings['search_client'] == 'locate':
         cmd = '/usr/bin/locate --statistics'
@@ -221,7 +224,12 @@ def statistics_page():
         body.append(lines.pop(0))
         body.append(' <ul>')
         while lines:
-            body.append('  <li>%s</li>' % lines.pop(0))
+            line = lines.pop(0)
+            if line:
+                details = line.split(None, 1)
+                if details[0].isdigit():
+                    n = locale.format('%d', int(details[0]), grouping=True)
+                    body.append('  <li>%s %s</li>' % (n, details[1]))
         body.append(' </ul>')
 
     body.append('<p />')

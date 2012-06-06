@@ -276,6 +276,7 @@ def read_du_file_maybe(filename):
     global du
     global du_last_read
     if not du or os.path.getmtime(filename) > du_last_read:
+        du = {}
         du_units = settings['du_units']
         f = open(filename)
         for line in f:

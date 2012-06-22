@@ -286,7 +286,7 @@ def read_du_file_maybe(filename):
             if len(fields) == 3:
                 mtime = fields[1]	# du --time parameter
             else:
-                mtime = name
+                mtime = ''
             du[name] = [size, mtime]
         f.close()
         if sep in du:

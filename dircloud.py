@@ -333,7 +333,7 @@ def read_directory_from_disk(dirname):
     for filename in filenames:
         if filename in ignored:
             continue
-        fullpath = dirname + filename
+        fullpath = os.path.join(dirname, filename)
         size = os.path.getsize(fullpath)
         mtime = os.path.getmtime(fullpath)
         localtime = time.localtime(mtime)

@@ -55,6 +55,7 @@ settings = {
     'read_from_disk_tip': 'Read the contents of the disc, bypassing the cache',
     'logo_href': 'http://localhost',
     'logo_img': 'http://localhost/whatever.png',
+    'help': '--help',
     }
 
 if settings['search_client'] == 'dicoclient':
@@ -820,6 +821,15 @@ span.filesize a { text-decoration: none; }
 '''
 
 
+def help(status):
+    out = []
+    for key in settings:
+        out.append('  --%s' % key)
+    out.sort()
+    print >>sys.stderr,'\n'.join(out)
+    sys.exit(status)
+
+
 if __name__ == '__main__':
     if 'DIRCLOUD_DEBUG' in os.environ:
         settings['verbose'] = True
@@ -827,7 +837,26 @@ if __name__ == '__main__':
         settings['reloader'] = True
     debug(settings['debug'])
     if len(sys.argv) > 1:
-        settings['filename'] = sys.argv[1]
+        args = sys.argv[1:]
+        while args:
+            arg = args.pop(0)
+            if arg.startswith('--'):
+                if arg == '--help':
+                    help(0)
+                else:
+                    try:
+                        (key, value) = arg.split('=')
+                        key = key[2:]
+                        if key in settings:
+                            settings[key] = value
+                        else:
+                            print >>sys.stderr,'Unknown option: %s' % (key)
+                            help(1)
+                    except:
+                        print >>sys.stderr,'Unknown option'
+                        help(1)
+        if args:
+            settings['filename'] = arg
     run(host = settings['host'],
         port = settings['port'],
         reloader = settings['reloader'])

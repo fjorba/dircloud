@@ -143,13 +143,22 @@ def search():
         if match == 'on':
             result = dico_match(q)
             results += dico_match2html(result)
-    else:
+    elif settings['search_client'] == 'locate':
         if match == 'on':
             opt = '--regex'
         else:
             opt = ''
         cmd = '/usr/bin/locate %s %s' % (opt, q)
         out = subprocess.getoutput(cmd)
+        results = locate2html(out)
+    elif settings['search_client'] == 'string':
+        if match == 'on':
+            q = q.lower()
+            lines = [line for line in du if line.lower().count(q)]
+        else:
+            lines = [line for line in du if line.count(q)]
+        lines.sort()
+        out = '\n'.join(lines)
         results = locate2html(out)
 
     page = make_html_page(dirpath='/', header='',
@@ -231,6 +240,10 @@ def statistics_page():
                 if details[0].isdigit():
                     n = locale.format('%d', int(details[0]), grouping=True)
                     body.append('  <li>%s %s</li>' % (n, details[1]))
+        body.append(' </ul>')
+    elif settings['search_client'] == 'string':
+        body.append(' <ul>')
+        body.append('  <li>%s %s</li>' % (len(du), 'lines'))
         body.append(' </ul>')
 
     body.append('<p />')

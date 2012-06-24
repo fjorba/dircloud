@@ -848,6 +848,8 @@ if __name__ == '__main__':
                         (key, value) = arg.split('=')
                         key = key[2:]
                         if key in settings:
+                            if value.isdigit():
+                                value = int(value)
                             settings[key] = value
                         else:
                             print >>sys.stderr,'Unknown option: %s' % (key)

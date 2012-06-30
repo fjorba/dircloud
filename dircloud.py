@@ -66,11 +66,129 @@ if settings['search_client'] == 'dicoclient':
     except:
         settings['search_client'] = 'locate'
 
-sep = os.path.sep
-du = {}
-du_last_read = 0
-read_from_disk = '!'
+class Tree():
+    '''Simple tree structure, modeled after the du output.  Branches
+    names are just paths (strings), and values a tuple of a numeric
+    value (filesize) and an optional string (timestamp).  It provides
+    some level of tolerance and self-correction for ill formed
+    paths.'''
+
+    def __init__(self, last_read=0, broken=False):
+        self.branches = {}
+        self.empty = [0, '']
+        self.last_read = last_read
+        self.broken = broken
+        self.bytes = True
+
+    def __len__(self):
+        return len(self.branches)
+
+    def __getitem__(self, name):
+        return self.getBranch(name)
+
+    def addBranch(self, name, values):
+        self.branches[name] = values
+        if self.broken:
+            # Add values to parents
+            value = values[0]
+            parent = self.getParentName(name)
+            while parent:
+                self.sumToBranch(parent, value)
+                parent = self.getParentName(parent)
+
+    def updateBranch(self, name, values):
+        if not name in self.branches:
+            name = self._normpath(name)
+        old_value = self.branch[name][0]
+        new_value = values[0]
+        diff = old - new
+        self.branches[name] = values
+        if self.broken:
+            # Sync values to parents
+            parent = self.getParentName(name)
+            while parent:
+                self.sumToBranch(parent, diff)
+                parent = self.getParentName(parent)
+
+    def sumToBranch(self, name, value):
+        if not name in self.branches:
+            name = self._normpath(name)
+        self.branches[name][0] += value
+
+    def getBranch(self, name):
+        if name in self.branches:
+            return self.branches[name]
+        else:
+            name = self._normpath(name)
+            if name in self.branches:
+                return self.branches[name]
+            else:
+                return self.empty
+
+    def getParentName(self, name):
+        if not name in self.branches:
+            name = self._normpath(name)
+        n = name.count(sep)
+        if n > 1:
+            parent = sep.join(name.split(sep)[:n-1])
+            if self.broken and not parent in self.branches:
+                values = self.getBranch(name)
+                self.addBranch(parent, values)
+            return parent
+        else:
+            return ''
+
+    def delBranch(self, name):
+        if not name in self.branches:
+            name = self._normpath(name)
+        if name in self.branches:
+            # First, substact values to parents
+            values = self.getBranch(name)
+            value = -values[0]
+            parent = self.getParentName(name)
+            while parent:
+                self.sumToBranch(parent, value)
+                parent = self.getParentName(parent)
+            del self.branches[name]
+
+    def getChildren(self, name):
+        if not name in self.branches:
+            name = self._normpath(name)
+        if name in ('', '/'):
+            pos = 0
+            names = [child for child in self.branches if (
+                    child.count(sep) == 1)]
+            if sep in names:
+                names.remove(sep)
+        else:
+            pos = len(name)
+            n = name.count(sep) + 1
+            names = [child for child in self.branches if (
+                    child.startswith(name) and child.count(sep) == n)]
+        children = {}
+        for name in names:
+            children[name[pos:]] = self.branches[name]
+        return children
+
+    def getBranches(self):
+        names = list(self.branches)
+        ## VersionSort!!
+        names.sort()
+        return names
+
+    def _normpath(self, name):
+        if name in self.branches:
+            return name
+        elif name + sep in self.branches:
+            return name + sep
+        else:
+            return os.path.normpath(name)
+
+
+du = Tree()
 df = []
+sep = os.path.sep
+read_from_disk = '!'
 locale.setlocale(locale.LC_ALL, '')
 
 
@@ -94,7 +212,7 @@ def dircloud(dirpath='/'):
         # No special request. Create normal navigation page
         directory = {}
         if not dirpath.endswith(read_from_disk):
-            directory = get_directory_from_tree(du, dirpath)
+            directory = du.getChildren(dirpath)
         if directory:
             entries = len(directory)
             total_size = sum([directory[name][0] for name in directory])
@@ -154,9 +272,9 @@ def search():
     elif settings['search_client'] == 'string':
         if match == 'on':
             q = q.lower()
-            lines = [line for line in du if line.lower().count(q)]
+            lines = [line for line in du.getBranches() if line.lower().count(q)]
         else:
-            lines = [line for line in du if line.count(q)]
+            lines = [line for line in du.getBranches() if line.count(q)]
         lines.sort()
         out = '\n'.join(lines)
         results = locate2html(out)
@@ -249,7 +367,7 @@ def statistics_page():
     body.append('<p />')
     body.append('%s directories from %s' % (len(du), settings['filename']))
 
-    space = get_directory_from_tree(df, '/')
+    space = df.getChildren('/')
     cloud = make_cloud('space/', space, prefix='?dircloud=',
                        strip_trailing_slash=True)
 
@@ -269,10 +387,7 @@ def space_page(which):
     body = []
     body.append('<p />')
 
-    if not which.endswith('/'):
-        which += '/'
-
-    space = get_directory_from_tree(df, which)
+    space = df.getChildren(which)
     cloud = make_cloud('space/', space)
 
     body.append(cloud)
@@ -288,9 +403,9 @@ def space_page(which):
 def read_du_file_maybe(filename):
     '''Read a du tree from disk and store as dict'''
     global du
-    global du_last_read
-    if not du or os.path.getmtime(filename) > du_last_read:
-        du = {}
+    mtime = os.path.getmtime(filename)
+    if not du or mtime > du.last_read:
+        du = Tree(time.time())
         du_units = settings['du_units']
         f = open(filename)
         for line in f:
@@ -301,34 +416,12 @@ def read_du_file_maybe(filename):
                 mtime = fields[1]	# du --time parameter
             else:
                 mtime = ''
-            du[name] = [size, mtime]
+            values = [size, mtime]
+            du.addBranch(name, values)
         f.close()
         if sep in du:
-            del du[sep]
-        du_last_read = time.time()
+            du.delBranch(sep)
     return du
-
-
-def get_directory_from_tree(tree, dirpath):
-    '''Return a dict with the first-level names that start with
-    dirpath as key, and filesize as value'''
-
-    if dirpath in ('', '/'):
-        pos = 0
-        dirnames = [dirname for dirname in tree if dirname.count(sep) == 1]
-    else:
-        pos = len(dirpath)
-        n = dirpath.count(sep) + 1
-        dirnames = [dirname for dirname in tree if (dirname.startswith(dirpath)
-                                                  and dirname.count(sep) <= n)]
-        if dirpath in dirnames:
-            dirnames.remove(dirpath)
-
-    directory = {}
-    for dirname in dirnames:
-        directory[dirname[pos:]] = tree[dirname]
-
-    return directory
 
 
 def read_directory_from_disk(dirname):
@@ -356,9 +449,10 @@ def read_directory_from_disk(dirname):
         if os.path.isdir(fullpath):
             filename += sep
             dirpath += sep
-            if dirpath in du:
+            if du.getBranch(dirpath):
                 # We prefer the size of the contents, no the direntry
-                size = du[dirpath][0]
+                values = du.getBranch(dirpath)
+                size = values[0]
         directory[filename] = [size, mtime]
         if settings['update_du_with_read_from_disk']:
             if not dirpath in du:
@@ -389,18 +483,13 @@ def read_file_if_exists(dirpath, filename):
 
 def read_df_output():
     '''Calculate free and used disc space'''
-
     cmd = 'LC_ALL=C /bin/df -k'
     title = {
-        'size/': 'Total space, used and free',
-        'used/': 'Used space',
-        'available/': 'Free space available',
+        'size': 'Total space, used and free',
+        'used': 'Used space',
+        'available': 'Free space available',
         }
-    df = {
-        'size/': [0, title['size/']],
-        'used/': [0, title['used/']],
-        'available/': [0, title['available/']],
-        }
+    df = Tree(broken=False)
     out = subprocess.getoutput(cmd)
     lines = out.split('\n')
     for line in lines:
@@ -409,13 +498,15 @@ def read_df_output():
             size = int(size) * 1024
             used = int(used) * 1024
             available = int(available) * 1024
-            df['size%s/' % (mounted_on)] = [size, title['size/']]
-            df['used%s/' % (mounted_on)] = [used, title['used/']]
-            df['available%s/' % (mounted_on)] = [available, title['available/']]
-            df['size/'][0] += size
-            df['used/'][0] += used
-            df['available/'][0] += available
-
+            name = os.path.normpath('size%s/' % (mounted_on)) + sep
+            df.addBranch(name, [size, title['size']])
+            df.sumToBranch('size/', size)
+            name = os.path.normpath('used%s/' % (mounted_on)) + sep
+            df.addBranch(name, [used, title['used']])
+            df.sumToBranch('used/', used)
+            name = os.path.normpath('available%s/' % (mounted_on)) + sep
+            df.addBranch(name, [available, title['available']])
+            df.sumToBranch('available/', available)
     return df
 
 
@@ -495,7 +586,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
     if settings['verbose']:
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
-        directory = get_directory_from_tree(du, '/')
+        directory = du.getChildren('/')
         filesize = sum([directory[name][0] for name in directory])
         if dirpath in ('', read_from_disk):
             dirpath = sep

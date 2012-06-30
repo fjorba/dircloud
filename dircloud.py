@@ -128,9 +128,10 @@ class Tree():
     def getParentName(self, name):
         if not name in self.branches:
             name = self._normpath(name)
+        name = name.rstrip(sep)
         n = name.count(sep)
-        if n > 1:
-            parent = sep.join(name.split(sep)[:n-1])
+        if n:
+            parent = sep.join(name.split(sep)[:n]) + sep
             if self.broken and not parent in self.branches:
                 values = self.getBranch(name)
                 self.addBranch(parent, values)
@@ -483,30 +484,33 @@ def read_file_if_exists(dirpath, filename):
 
 def read_df_output():
     '''Calculate free and used disc space'''
-    cmd = 'LC_ALL=C /bin/df -k'
+
+    df = Tree(broken=True)
     title = {
         'size': 'Total space, used and free',
         'used': 'Used space',
         'available': 'Free space available',
         }
-    df = Tree(broken=False)
+    bytes = {}
+    cmd = 'LC_ALL=C /bin/df -k'
+
     out = subprocess.getoutput(cmd)
     lines = out.split('\n')
     for line in lines:
         (filesystem, size, used, available, percent, mounted_on) = line.split(None, 5)
         if size.isdigit():
-            size = int(size) * 1024
-            used = int(used) * 1024
-            available = int(available) * 1024
-            name = os.path.normpath('size%s/' % (mounted_on)) + sep
-            df.addBranch(name, [size, title['size']])
-            df.sumToBranch('size/', size)
-            name = os.path.normpath('used%s/' % (mounted_on)) + sep
-            df.addBranch(name, [used, title['used']])
-            df.sumToBranch('used/', used)
-            name = os.path.normpath('available%s/' % (mounted_on)) + sep
-            df.addBranch(name, [available, title['available']])
-            df.sumToBranch('available/', available)
+            bytes['size'] = int(size) * 1024
+            bytes['used'] = int(used) * 1024
+            bytes['available'] = int(available) * 1024
+            for column in ['size', 'used', 'available']:
+                # We cannot use os.path.join here because mounted_on
+                # is an absolute path, and os.path.join refuses to
+                # join them.  We can use os.path.normpath, though
+                name = sep.join((column, mounted_on))
+                name = os.path.normpath(name) + sep
+                values = [bytes[column], title[column]]
+                df.addBranch(name, values)
+
     return df
 
 

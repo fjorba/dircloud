@@ -34,6 +34,7 @@ settings = {
     # du file details
     'filename': '/tmp/du.out',
     'du_units': 1024,  # GNU's coreutils du default is 1k
+    'bytes': True,     # False if we are dealing with non-disk trees
 
     # Apache-like options
     'DocumentRoot': '/',
@@ -343,7 +344,7 @@ def statistics_page():
             if line:
                 details = line.split()
                 if details[1].isdigit():
-                    n = locale.format('%d', int(details[1]), grouping=True)
+                    n = thousands_separator(int(details[1]))
                     body.append('  <li>%s %s</li>' % (n, details[0]))
         body.append(' </ul>')
     elif settings['search_client'] == 'locate':
@@ -357,7 +358,7 @@ def statistics_page():
             if line:
                 details = line.split(None, 1)
                 if details[0].isdigit():
-                    n = locale.format('%d', int(details[0]), grouping=True)
+                    n = thousands_separator(int(details[0]))
                     body.append('  <li>%s %s</li>' % (n, details[1]))
         body.append(' </ul>')
     elif settings['search_client'] == 'string':
@@ -420,7 +421,7 @@ def read_du_file_maybe(filename):
             values = [size, mtime]
             du.addBranch(name, values)
         f.close()
-        if sep in du:
+        if du.getBranch(sep):
             du.delBranch(sep)
     return du
 
@@ -747,6 +748,22 @@ def version_key(value):
                 for chunk in version_re.split(value)]
 
 
+def thousands_separator(n):
+    '''Format n with thousands separators for readability.  Mostly
+    distilled from
+    http://stackoverflow.com/questions/1823058/how-to-print-number-with-commas-as-thousands-separators-in-python-2-x'''
+    if sys.version_info[:2] >= (3, 1):
+        return format(n, ',d')
+    else:
+        if n < 0:
+            return '-' + thousands_separator(n)
+        result = ''
+        while n >= 1000:
+            n, r = divmod(n, 1000)
+            result = ',%03d%s' % (r, result)
+        return '%d%s' % (n, result)
+
+
 # From http://trac.edgewall.org/browser/trunk/trac/util/text.py
 # def pretty_size
 def human_readable(size, format='%.1f'):
@@ -757,6 +774,9 @@ def human_readable(size, format='%.1f'):
     """
     if size is None:
         return ''
+
+    if not settings['bytes']:
+        return thousands_separator(size)
 
     jump = 1024
     if size < jump:

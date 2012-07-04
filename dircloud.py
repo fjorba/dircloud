@@ -43,8 +43,9 @@ settings = {
     'VersionSort': True,
     'IndexIgnore': ['*~'],
     'mimetypes': {	# Overwrite defaults, if any
-        '.info': 'text/plain',
         '.dir': 'text/plain',
+        '.info': 'text/plain',
+        '.log': 'text/plain',
         },
     'robots.txt': 'User-agent: *\nDisallow: *',
 

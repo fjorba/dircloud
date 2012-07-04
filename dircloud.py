@@ -328,7 +328,10 @@ def statistics_page():
     body = []
     body.append('<p />')
 
-    if settings['search_client'] == 'dicoclient':
+    if not settings['bytes']:
+        # No disc statistcs make sense for arbitrary tres
+        pass
+    elif settings['search_client'] == 'dicoclient':
         try:
             out = dico.show_server()
         except DicoNotConnectedError:
@@ -487,6 +490,11 @@ def read_df_output():
     '''Calculate free and used disc space'''
 
     df = Tree(broken=True)
+
+    if not settings['bytes']:
+        # No disc statistcs make sense for arbitrary tres
+        return df
+
     title = {
         'size': 'Total space, used and free',
         'used': 'Used space',

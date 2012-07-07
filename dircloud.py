@@ -57,6 +57,10 @@ settings = {
     'read_from_disk_tip': 'Read the contents of the disc, bypassing the cache',
     'logo_href': 'http://localhost',
     'logo_img': 'http://localhost/whatever.png',
+    'ignore_filesystems': [ # Linux virtual filesystems to ignore for df metrics
+        'tmpfs',
+        'udev'
+        ],
     'help': '--help',
     }
 
@@ -488,38 +492,54 @@ def read_file_if_exists(dirpath, filename):
 
 
 def read_df_output():
-    '''Calculate free and used disc space'''
+    '''Calculate free and used disc space, and build a tree with tree
+    branches: total size, used and available, each with filesystems as
+    branches'''
 
-    df = Tree(broken=True)
+    cmd = 'LC_ALL=C /bin/df -k'
 
+    df = Tree()
     if not settings['bytes']:
         # No disc statistcs make sense for arbitrary tres
         return df
 
-    title = {
+    metrics = {
         'size': 'Total space, used and free',
         'used': 'Used space',
         'available': 'Free space available',
         }
-    bytes = {}
-    cmd = 'LC_ALL=C /bin/df -k'
+    for metric in metrics:
+        # Fill root branches with zero values
+        df.addBranch(metric + sep, [0, metrics[metric]])
 
+    bytes = {}
     out = subprocess.getoutput(cmd)
     lines = out.split('\n')
     for line in lines:
         (filesystem, size, used, available, percent, mounted_on) = line.split(None, 5)
-        if size.isdigit():
+        if size.isdigit() and filesystem not in settings['ignore_filesystems']:
+            if mounted_on == '/':
+                # Special case: the root filesystem.  We'll change its
+                # name to 'root' to be alphanumeric and follow the
+                # same rules than the others.
+                mounted_on = 'root'
             bytes['size'] = int(size) * 1024
             bytes['used'] = int(used) * 1024
             bytes['available'] = int(available) * 1024
-            for column in ['size', 'used', 'available']:
+            for metric in metrics:
                 # We cannot use os.path.join here because mounted_on
-                # is an absolute path, and os.path.join refuses to
-                # join them.  We can use os.path.normpath, though
-                name = sep.join((column, mounted_on))
+                # is an absolute path, and os.path.join discards all
+                # previous paths components, as documented.  We can
+                # use os.path.normpath, though, to remove double
+                # slashes and clean it up.
+                name = sep.join((metric, mounted_on))
                 name = os.path.normpath(name) + sep
-                values = [bytes[column], title[column]]
+                values = [bytes[metric], metrics[metric]]
                 df.addBranch(name, values)
+                parent = metric + sep
+                if parent != name:
+                    # Add to root branches (metrics)
+                    df.sumToBranch(parent, bytes[metric])
 
     return df
 

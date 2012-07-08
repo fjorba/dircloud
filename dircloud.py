@@ -375,7 +375,8 @@ def statistics_page():
         body.append(' </ul>')
 
     body.append('<p />')
-    body.append('%s directories from %s' % (len(du), settings['filename']))
+    body.append('%s directories from %s' % (thousands_separator(len(du)),
+                                            settings['filename']))
 
     space = df.getChildren('/')
     cloud = make_cloud('space/', space, prefix='?dircloud=',

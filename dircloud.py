@@ -14,7 +14,7 @@ import time
 import re
 import fnmatch
 import locale
-from bottle import route, run, debug, request, response, static_file
+from bottle import route, run, debug, redirect, request, response, static_file
 
 if sys.version_info[0] == 2:
     import commands as subprocess
@@ -220,6 +220,8 @@ def dircloud(dirpath='/'):
         directory = {}
         if not dirpath.endswith(read_from_disk):
             directory = du.getChildren(dirpath)
+            if directory and not dirpath.endswith(sep):
+                redirect(dirpath + sep)
         if directory:
             entries = len(directory)
             total_size = sum([directory[name][0] for name in directory])
@@ -231,6 +233,8 @@ def dircloud(dirpath='/'):
             else:
                 dirname = settings['DocumentRoot'] + dirpath.rstrip(read_from_disk)
             if os.path.isdir(dirname):
+                if not dirname.endswith(sep):
+                    redirect(dirname + sep)
                 directory = read_directory_from_disk(dirname)
                 header = read_file_if_exists(dirname, settings['HeaderName'])
                 footer = read_file_if_exists(dirname, settings['ReadmeName'])

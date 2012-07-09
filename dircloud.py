@@ -205,7 +205,7 @@ def dircloud(dirpath='/'):
     global du, df
     du = read_du_file_maybe(settings['filename'])
 
-    if not df:
+    if not df or df.last_read < du.last_read:
         df = read_df_output()
 
     special = request.GET.get('dircloud')
@@ -503,7 +503,7 @@ def read_df_output():
 
     cmd = 'LC_ALL=C /bin/df -k'
 
-    df = Tree()
+    df = Tree(time.time())
     if not settings['bytes']:
         # No disc statistcs make sense for arbitrary tres
         return df

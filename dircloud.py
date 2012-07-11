@@ -368,10 +368,15 @@ def statistics_page():
         while lines:
             line = lines.pop(0)
             if line:
-                details = line.split(None, 1)
+                details = line.split()
                 if details[0].isdigit():
-                    n = thousands_separator(int(details[0]))
-                    body.append('  <li>%s %s</li>' % (n, details[1]))
+                    if details[1] == 'bytes':
+                        n = human_readable(int(details[0]))
+                        concept = ' '.join(details[2:])
+                    else:
+                        n = thousands_separator(int(details[0]))
+                        concept = ' '.join(details[1:])
+                    body.append('  <li>%s %s</li>' % (n, concept))
         body.append(' </ul>')
     elif settings['search_client'] == 'string':
         body.append(' <ul>')

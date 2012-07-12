@@ -384,8 +384,13 @@ def statistics_page():
         body.append(' </ul>')
 
     body.append('<p />')
-    body.append('%s directories from %s' % (thousands_separator(len(du)),
-                                            settings['filename']))
+    body.append('Input file %s' % (settings['filename']))
+    body.append(' <ul>')
+    body.append('  <li>updated on %s</li>' % (
+                time.strftime('%Y-%m-%d %H:%M', time.localtime(du.last_read))
+                ))
+    body.append('  <li>%s directories</li>' % (thousands_separator(len(du))))
+    body.append(' </ul>')
 
     space = df.getChildren('/')
     cloud = make_cloud('space/', space, prefix='?dircloud=',

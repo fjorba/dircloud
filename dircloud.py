@@ -302,7 +302,7 @@ def robots():
 
 
 def credits_page():
-    head = html_head('Credits', 'dircloud', 'dircloud')
+    head = html_head(title='Credits', dirpath='dircloud', breadcrumb='dircloud')
 
     body = []
     body.append('<h1>Credits</h1>')
@@ -332,7 +332,8 @@ def credits_page():
 
 
 def statistics_page():
-    head = html_head('Statistics', 'dircloud', 'dircloud')
+    head = html_head(title='Statistics', dirpath=settings['host'], 
+                     breadcrumb=settings['host'])
 
     body = []
     body.append('<p />')
@@ -407,7 +408,8 @@ def statistics_page():
 
 
 def space_page(which):
-    head = html_head('Space', 'dircloud', 'dircloud')
+    head = html_head(title='Space', title_href='/?dircloud=statistics',
+                     dirpath='dircloud', breadcrumb='dircloud')
 
     body = []
     body.append('<p />')
@@ -648,7 +650,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
                         })
     breadcrumb = sep.join(breadcrumbs)
 
-    head = html_head('Dircloud', dirpath, breadcrumb)
+    head = html_head(title='Dircloud', dirpath=dirpath, breadcrumb=breadcrumb)
 
     form = '''
 <form method="get" action="/search" enctype="application/x-www-form-urlencoded">
@@ -835,18 +837,19 @@ def human_readable(size, format='%.1f'):
     return (format + ' %s') % (size, units[i-1])
 
 
-def html_head(name, dirpath, breadcrumb):
+def html_head(title='Dircloud', title_href='/', dirpath='', breadcrumb=''):
    return '''<html>
  <head>
-  <title>%(name)s of %(dirpath)s</title>
+  <title>%(title)s of %(dirpath)s</title>
  </head>
  %(css)s
  <body>
   <div class="page_header">
    <a title="logo" href="%(logo_href)s"><img src="%(logo_img)s" alt="logo" class="logo"/></a>
-   <a href="/">%(name)s</a> of %(breadcrumb)s
+   <a href="%(title_href)s">%(title)s</a> of %(breadcrumb)s
   </div>
-''' % ({'name': name,
+''' % ({'title': title,
+        'title_href': title_href,
         'dirpath': dirpath,
         'breadcrumb': breadcrumb,
         'css': get_css(),

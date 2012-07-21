@@ -79,7 +79,8 @@ class Tree():
     some level of tolerance and self-correction for ill formed
     paths.'''
 
-    def __init__(self, last_read=0, broken=False):
+    def __init__(self, filename = '', last_read=0, broken=False):
+        self.filename = filename,
         self.branches = {}
         self.empty = [0, '']
         self.last_read = last_read
@@ -385,7 +386,25 @@ def statistics_page():
         body.append(' </ul>')
 
     body.append('<p />')
-    body.append('Input file %s' % (settings['filename']))
+
+    filenames = settings['filename'].split(',')
+    if len(filenames) > 1:
+        # When dircloud whas called with a list of comma-separated
+        # input files, this form allows the end user to change fie.
+        select = []
+        select.append('<form action="/switch_file">')
+        select.append('Input file')
+        select.append(' <select name="filename" onchange="this.form.submit()">')
+        for filename in filenames:
+            basename = os.path.split(filename)[-1]
+            basename = os.path.splitext(basename)[0]
+            select.append('  <option value="%s">%s</option>' % (filename,
+                                                                filename))
+        select.append(' </select>')
+        select.append('</form>')
+        body.append('\n'.join(select))
+    else:
+        body.append('Input file %s' % (settings['filename']))
     body.append(' <ul>')
     body.append('  <li>updated on %s</li>' % (
                 time.strftime('%Y-%m-%d %H:%M', time.localtime(du.last_read))
@@ -427,12 +446,33 @@ def space_page(which):
     return page
 
 
-def read_du_file_maybe(filename):
+@route('/switch_file')
+def switch_file():
+    '''Force a read of input file swapping the order of input files
+
+    When calling dircloud with more than one input file
+    (comma-separated), the default file is the first one.  This
+    somewhat hasckish function puts the selected file first and forces
+    a change of input file.
+    '''
+    global du
+    filename = str(request.GET.get('filename'))
+    filenames = settings['filename'].split(',')
+    filenames.remove(filename)
+    filenames.insert(0, filename)
+    settings['filename'] = ','.join(filenames)
+    du = read_du_file_maybe(filename)
+    redirect('/')
+    return du
+
+
+def read_du_file_maybe(filenames):
     '''Read a du tree from disk and store as dict'''
     global du
+    filename = filenames.split(',')[0]
     mtime = os.path.getmtime(filename)
-    if not du or mtime > du.last_read:
-        du = Tree(time.time())
+    if not du or mtime > du.last_read or filename != du.filename:
+        du = Tree(filename=filename, last_read=time.time())
         du_units = settings['du_units']
         f = open(filename)
         for line in f:
@@ -515,7 +555,7 @@ def read_df_output():
 
     cmd = 'LC_ALL=C /bin/df -k'
 
-    df = Tree(time.time())
+    df = Tree(last_read=time.time())
     if not settings['bytes']:
         # No disc statistcs make sense for arbitrary tres
         return df

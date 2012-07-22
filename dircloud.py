@@ -302,6 +302,15 @@ def robots():
     return settings['robots.txt']
 
 
+@route('/favicon.ico')
+def favicon():
+    '''Provide an explicit answer for the unavoidable favicon requests
+
+    Until we have a nice icon, return nothing.'''
+    response.content_type = 'image/x-icon'
+    return ''
+
+
 def credits_page():
     head = html_head(title='Credits', dirpath='dircloud', breadcrumb='dircloud')
 

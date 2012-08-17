@@ -52,6 +52,7 @@ settings = {
     # Misc options
     'update_du_with_read_from_disk': False, # Should get rid of this one
     'search_client': 'dicoclient',
+    'openfile_fallback': '',
     'search_tip': 'Search files or directories',
     'checkbox_tip': 'Search using a regular expression',
     'read_from_disk_tip': 'Read the contents of the disc, bypassing the cache',
@@ -64,13 +65,20 @@ settings = {
     'help': '--help',
     }
 
-if settings['search_client'] == 'dicoclient':
+if settings['openfile_fallback'].startswith('sqlite'):
+    # This import will not work properly until argparse is
+    # implemented, unless sqlite is explicity written in the above
+    # settings.  But as it is use is likely to be minoritary, better
+    # not to import unconditionally.
+    import sqlite3
+
+if settings['search_client'] == 'dicoclient' or settings['openfile_fallback'].startswith('dict'):
     try:
         from dicoclient import DicoClient, DicoNotConnectedError
         dico = DicoClient()
-        dico.open('localhost')
     except:
         settings['search_client'] = 'locate'
+
 
 class Tree():
     '''Simple tree structure, modeled after the du output.  Branches
@@ -239,13 +247,18 @@ def dircloud(dirpath='/'):
                 directory = read_directory_from_disk(dirname)
                 header = read_file_if_exists(dirname, settings['HeaderName'])
                 footer = read_file_if_exists(dirname, settings['ReadmeName'])
-            else:
+            elif os.path.isfile(dirname):
                 (path, filename) = os.path.split(dirname)
                 (basename, ext) = os.path.splitext(filename)
                 if ext in settings['mimetypes']:
                     return static_file(filename, root=path, mimetype=settings['mimetypes'][ext])
                 else:
                     return static_file(filename, root=path)
+            elif settings['openfile_fallback']:
+                filename = dirname.split(sep)[-2]
+                return openfile_fallback(filename)
+            else:
+                return 'Unknown %s' % (dirname)
 
         cloud = make_cloud(dirpath, directory)
         page = make_html_page(dirpath=dirpath, header=header,
@@ -555,6 +568,91 @@ def read_file_if_exists(dirpath, filename):
     else:
         contents = ''
     return contents
+
+
+def openfile_fallback(item, pre=True):
+    '''Read the contents of a leaf as indicated in the
+    openfile_fallback parameters
+
+    When using dircloud to display tree-like structures that don't
+    correspond to a disc directory and files, like simple catalogs,
+    this funcion provides some methods to get the information of the
+    final leaf, filename or record.
+
+    Currently there are four methods: file, http(s), dict and sqlite.
+    Syntax used is the canonical protocol, with a single printf-like
+    %s field to indicate the record.  For sqlite, as it seems that
+    there is no standard protocol syntax, we use a dict-like one, with
+    two extra fields to accomodate the selected column and index
+    field.
+
+    - file://%s or file://path/%s
+    - http://hostname/%s of http://hostname/whatever?field=%s
+    - dict://host/d:%s or dict://host/d:%s:database
+    - sqlite://path/database.db/d:%s:table:column:key
+
+    TODO:
+    - resolve how to parameterize pre
+    - accept unicode strings!
+    '''
+
+    protocol = settings['openfile_fallback'].split(':')[0]
+    contents = []
+
+    if protocol in ['http', 'https']:
+        # Web browsers already know those protocols.  Just redirect
+        # and let the browser do all the job, including error handling.
+        url = settings['openfile_fallback'] % (item)
+        redirect(url)
+    elif protocol == 'file':
+        filepath = settings['openfile_fallback'].replace('file://', '')
+        filename =  filepath % (item)
+        if os.path.isfile(filename):
+            contents.append(read_file_if_exists('.', filename))
+        else:
+            contents.append('Cannot open %s' % (filename))
+    elif protocol == 'dict':
+        protocol_re = "(\w+)://([\w./]+)/d:(%s):*([\w:\*]+)*"
+        (protocol, host, what, dictionary) = re.findall(protocol_re, settings['openfile_fallback'])[0]
+        if not dictionary:
+            dictionary = '*'
+        try:
+            fallback = DicoClient()
+        except:
+            contents.append('Sorry, cannot create dict client for %s' % (settings['openfile_fallback']))
+        else:
+            try:
+                fallback.open(host)
+            except:
+                contents.append('Sorry, cannot open dict connection at %s' % (host))
+            else:
+                definitions = fallback.define(dictionary, item)
+                if 'error' in definitions:
+                    contents.append('No results found for %s at %s' % (item, settings['openfile_fallback']))
+                else:
+                    contents = [definitions['definitions'][i]['desc'] for i in range(len(definitions['definitions']))]
+    elif protocol == 'sqlite':
+        protocol_re = "(\w+)://([\w./]+)/d:(%s):(\w+):(\w+):(\w+)"
+        (protocol, filename, what, table, column, key) = re.findall(protocol_re, settings['openfile_fallback'])[0]
+        fallback = sqlite3.connect(filename)
+        t = (item,)
+        sql = 'select %(column)s from %(table)s where %(key)s=?;' % {
+            'column': column,
+            'table': table,
+            'key': key,
+            }
+        for row in fallback.execute(sql, t):
+            contents.append(row[0])
+        if not contents:
+            contents.append('No results found for %s at %s' % (item, settings['openfile_fallback']))
+        fallback.close()
+
+    if pre:
+        out = '<pre>\n%s\n</pre>' % ('\n\n'.join(contents))
+    else:
+        out = '\n<p />\n'.join(contents)
+
+    return out
 
 
 def read_df_output():

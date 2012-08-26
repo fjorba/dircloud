@@ -14,70 +14,13 @@ import time
 import re
 import fnmatch
 import locale
+import argparse
 from bottle import route, run, debug, redirect, request, response, static_file
 
 if sys.version_info[0] == 2:
     import commands as subprocess
 else:
     import subprocess
-
-settings = {
-    # Bottle specific
-    'verbose': False,
-    'debug': True,
-    'reloader': False,
-
-    # Server information
-    'host': 'localhost',
-    'port': 2010,
-
-    # du file details
-    'filename': '/tmp/du.out',
-    'du_units': 1024,  # GNU's coreutils du default is 1k
-    'bytes': True,     # False if we are dealing with non-disk trees
-
-    # Apache-like options
-    'DocumentRoot': '/',
-    'HeaderName': 'HEADER.html',
-    'ReadmeName': 'README.html',
-    'VersionSort': True,
-    'IndexIgnore': ['*~'],
-    'mimetypes': {	# Overwrite defaults, if any
-        '.dir': 'text/plain',
-        '.info': 'text/plain',
-        '.log': 'text/plain',
-        },
-    'robots.txt': 'User-agent: *\nDisallow: *',
-
-    # Misc options
-    'update_du_with_read_from_disk': False, # Should get rid of this one
-    'search_client': 'dicoclient',
-    'openfile_fallback': '',
-    'search_tip': 'Search files or directories',
-    'checkbox_tip': 'Search using a regular expression',
-    'read_from_disk_tip': 'Read the contents of the disc, bypassing the cache',
-    'logo_href': 'http://localhost',
-    'logo_img': 'http://localhost/whatever.png',
-    'ignore_filesystems': [ # Linux virtual filesystems to ignore for df metrics
-        'tmpfs',
-        'udev'
-        ],
-    'help': '--help',
-    }
-
-if settings['openfile_fallback'].startswith('sqlite'):
-    # This import will not work properly until argparse is
-    # implemented, unless sqlite is explicity written in the above
-    # settings.  But as it is use is likely to be minoritary, better
-    # not to import unconditionally.
-    import sqlite3
-
-if settings['search_client'] == 'dicoclient' or settings['openfile_fallback'].startswith('dict'):
-    try:
-        from dicoclient import DicoClient, DicoNotConnectedError
-        dico = DicoClient()
-    except:
-        settings['search_client'] = 'locate'
 
 
 class Tree():
@@ -87,13 +30,14 @@ class Tree():
     some level of tolerance and self-correction for ill formed
     paths.'''
 
-    def __init__(self, filename = '', last_read=0, broken=False):
+    def __init__(self, filename = '', last_read=0, broken=False, version_sort=False):
         self.filename = filename,
         self.branches = {}
         self.empty = [0, '']
         self.last_read = last_read
         self.broken = broken
-        self.bytes = True
+        self.version_sort = version_sort
+        self.non_disk = False
 
     def __len__(self):
         return len(self.branches)
@@ -188,8 +132,10 @@ class Tree():
 
     def getBranches(self):
         names = list(self.branches)
-        ## VersionSort!!
-        names.sort()
+        if self.version_sort:
+            names.sort(key=version_key)
+        else:
+            names.sort()
         return names
 
     def _normpath(self, name):
@@ -212,7 +158,7 @@ locale.setlocale(locale.LC_ALL, '')
 @route('/:dirpath#.+#')
 def dircloud(dirpath='/'):
     global du, df
-    du = read_du_file_maybe(settings['filename'])
+    du = read_du_file_maybe(args.filename)
 
     if not df or df.last_read < du.last_read:
         df = read_df_output()
@@ -238,23 +184,23 @@ def dircloud(dirpath='/'):
             footer = ''
         else:
             if dirpath == read_from_disk:
-                dirname = settings['DocumentRoot']
+                dirname = args.document_root
             else:
-                dirname = settings['DocumentRoot'] + dirpath.rstrip(read_from_disk)
+                dirname = args.document_root + dirpath.rstrip(read_from_disk)
             if os.path.isdir(dirname):
                 if not dirname.endswith(sep):
                     redirect(dirname + sep)
                 directory = read_directory_from_disk(dirname)
-                header = read_file_if_exists(dirname, settings['HeaderName'])
-                footer = read_file_if_exists(dirname, settings['ReadmeName'])
+                header = read_file_if_exists(dirname, args.header_name)
+                footer = read_file_if_exists(dirname, args.readme_name)
             elif os.path.isfile(dirname):
                 (path, filename) = os.path.split(dirname)
                 (basename, ext) = os.path.splitext(filename)
-                if ext in settings['mimetypes']:
-                    return static_file(filename, root=path, mimetype=settings['mimetypes'][ext])
+                if ext in args.mimetypes:
+                    return static_file(filename, root=path, mimetype=args.mimetypes[ext])
                 else:
                     return static_file(filename, root=path)
-            elif settings['openfile_fallback']:
+            elif args.openfile_fallback:
                 filename = dirname.split(sep)[-2]
                 return openfile_fallback(filename)
             else:
@@ -271,7 +217,7 @@ def dircloud(dirpath='/'):
 def search():
     q = str(request.GET.get('q'))
     match = request.GET.get('match')
-    if settings['search_client'] == 'dicoclient':
+    if args.search_client == 'dicoclient':
         result = dico_define(q)
         results = ''
         if 'error' in result:
@@ -286,7 +232,7 @@ def search():
         if match == 'on':
             result = dico_match(q)
             results += dico_match2html(result)
-    elif settings['search_client'] == 'locate':
+    elif args.search_client == 'locate':
         if match == 'on':
             opt = '--regex'
         else:
@@ -294,7 +240,7 @@ def search():
         cmd = '/usr/bin/locate %s %s' % (opt, q)
         out = subprocess.getoutput(cmd)
         results = locate2html(out)
-    elif settings['search_client'] == 'string':
+    elif args.search_client == 'string':
         if match == 'on':
             q = q.lower()
             lines = [line for line in du.getBranches() if line.lower().count(q)]
@@ -312,7 +258,7 @@ def search():
 @route('/robots.txt')
 def robots():
     response.content_type = 'text/plain'
-    return settings['robots.txt']
+    return args.robots_txt
 
 
 @route('/favicon.ico')
@@ -333,9 +279,9 @@ def credits_page():
     body.append('  <li><a href="http://sd.wareonearth.com/~phil/xdu/">xdu</a> for the original graphical disk usage application.</li>')
     body.append('  <li><a href="http://repo.or.cz/">repo.or.cz</a> for inspiration and CSS for a web version.</li>')
     body.append('  <li><a href="http://bottlepy.org/">bottlepy</a> for a great minimalistic web framework.</li>')
-    if settings['search_client'] == 'dicoclient':
+    if args.search_client == 'dicoclient':
         body.append('  <li><a href="http://www.dict.org/">dict</a> for a wonderful indexing engine.</li>')
-    elif settings['search_client'] == 'locate':
+    elif args.search_client == 'locate':
         out = subprocess.getoutput('/usr/bin/locate --version')
         which_locate = out.split()[0]
         if which_locate == 'mlocate':
@@ -355,16 +301,16 @@ def credits_page():
 
 
 def statistics_page():
-    head = html_head(title='Statistics', dirpath=settings['host'], 
-                     breadcrumb=settings['host'])
+    head = html_head(title='Statistics', dirpath=args.host,
+                     breadcrumb=args.host)
 
     body = []
     body.append('<p />')
 
-    if not settings['bytes']:
-        # No disc statistcs make sense for arbitrary tres
+    if args.non_disk:
+        # No disk statistics make sense for arbitrary tres
         pass
-    elif settings['search_client'] == 'dicoclient':
+    elif args.search_client == 'dicoclient':
         try:
             out = dico.show_server()
         except DicoNotConnectedError:
@@ -383,7 +329,7 @@ def statistics_page():
                     n = thousands_separator(int(details[1]))
                     body.append('  <li>%s %s</li>' % (n, details[0]))
         body.append(' </ul>')
-    elif settings['search_client'] == 'locate':
+    elif args.search_client == 'locate':
         cmd = '/usr/bin/locate --statistics'
         out = subprocess.getoutput(cmd)
         lines = out.split('\n')
@@ -402,14 +348,14 @@ def statistics_page():
                         concept = ' '.join(details[1:])
                     body.append('  <li>%s %s</li>' % (n, concept))
         body.append(' </ul>')
-    elif settings['search_client'] == 'string':
+    elif args.search_client == 'string':
         body.append(' <ul>')
         body.append('  <li>%s %s</li>' % (len(du), 'lines'))
         body.append(' </ul>')
 
     body.append('<p />')
 
-    filenames = settings['filename'].split(',')
+    filenames = args.filename.split(',')
     if len(filenames) > 1:
         # When dircloud whas called with a list of comma-separated
         # input files, this form allows the end user to change fie.
@@ -426,7 +372,7 @@ def statistics_page():
         select.append('</form>')
         body.append('\n'.join(select))
     else:
-        body.append('Input file %s' % (settings['filename']))
+        body.append('Input file %s' % (args.filename))
     body.append(' <ul>')
     body.append('  <li>updated on %s</li>' % (
                 time.strftime('%Y-%m-%d %H:%M', time.localtime(du.last_read))
@@ -479,10 +425,10 @@ def switch_file():
     '''
     global du
     filename = str(request.GET.get('filename'))
-    filenames = settings['filename'].split(',')
+    filenames = args.filename.split(',')
     filenames.remove(filename)
     filenames.insert(0, filename)
-    settings['filename'] = ','.join(filenames)
+    args.filename = ','.join(filenames)
     du = read_du_file_maybe(filename)
     redirect('/')
     return du
@@ -494,8 +440,8 @@ def read_du_file_maybe(filenames):
     filename = filenames.split(',')[0]
     mtime = os.path.getmtime(filename)
     if not du or mtime > du.last_read or filename != du.filename:
-        du = Tree(filename=filename, last_read=time.time())
-        du_units = settings['du_units']
+        du = Tree(filename=filename, last_read=time.time(), version_sort=args.version_sort)
+        du_units = args.du_units
         f = open(filename)
         for line in f:
             fields = line.split('\t')
@@ -515,14 +461,14 @@ def read_du_file_maybe(filenames):
 
 def read_directory_from_disk(dirname):
     '''Read a directory from disk and return a dict with filenames and sizes'''
-    if settings['verbose']:
+    if args.verbose:
         print >>sys.stderr, 'Reading %s fromdisk' % (dirname)
     directory = {}
     ignored = []
     global du
 
     filenames = os.listdir(dirname)
-    for ignore in settings['IndexIgnore']:
+    for ignore in args.index_ignore:
         ignored.extend(fnmatch.filter(filenames, ignore))
     ignored = set(ignored)
 
@@ -534,7 +480,7 @@ def read_directory_from_disk(dirname):
         mtime = os.path.getmtime(fullpath)
         localtime = time.localtime(mtime)
         mtime = time.strftime('%Y-%m-%d %H:%M', localtime)
-        dirpath = fullpath[len(settings['DocumentRoot']):]
+        dirpath = fullpath[len(args.document_root):]
         if os.path.isdir(fullpath):
             filename += sep
             dirpath += sep
@@ -543,9 +489,9 @@ def read_directory_from_disk(dirname):
                 values = du.getBranch(dirpath)
                 size = values[0]
         directory[filename] = [size, mtime]
-        if settings['update_du_with_read_from_disk']:
+        if args.update_du_with_read_from_disk:
             if not dirpath in du:
-                if settings['verbose']:
+                if args.verbose:
                     print >>sys.stderr,'updating du[%s] with size %s' % (dirpath,
                                                                          size)
                 du[dirpath] = [size, mtime]
@@ -596,16 +542,16 @@ def openfile_fallback(item, pre=True):
     - accept unicode strings!
     '''
 
-    protocol = settings['openfile_fallback'].split(':')[0]
+    protocol = args.openfile_fallback.split(':')[0]
     contents = []
 
     if protocol in ['http', 'https']:
         # Web browsers already know those protocols.  Just redirect
         # and let the browser do all the job, including error handling.
-        url = settings['openfile_fallback'] % (item)
+        url = args.openfile_fallback % (item)
         redirect(url)
     elif protocol == 'file':
-        filepath = settings['openfile_fallback'].replace('file://', '')
+        filepath = args.openfile_fallback.replace('file://', '')
         filename =  filepath % (item)
         if os.path.isfile(filename):
             contents.append(read_file_if_exists('.', filename))
@@ -613,13 +559,13 @@ def openfile_fallback(item, pre=True):
             contents.append('Cannot open %s' % (filename))
     elif protocol == 'dict':
         protocol_re = "(\w+)://([\w./]+)/d:(%s):*([\w:\*]+)*"
-        (protocol, host, what, dictionary) = re.findall(protocol_re, settings['openfile_fallback'])[0]
+        (protocol, host, what, dictionary) = re.findall(protocol_re, args.openfile_fallback)[0]
         if not dictionary:
             dictionary = '*'
         try:
             fallback = DicoClient()
         except:
-            contents.append('Sorry, cannot create dict client for %s' % (settings['openfile_fallback']))
+            contents.append('Sorry, cannot create dict client for %s' % (args.openfile_fallback))
         else:
             try:
                 fallback.open(host)
@@ -628,12 +574,12 @@ def openfile_fallback(item, pre=True):
             else:
                 definitions = fallback.define(dictionary, item)
                 if 'error' in definitions:
-                    contents.append('No results found for %s at %s' % (item, settings['openfile_fallback']))
+                    contents.append('No results found for %s at %s' % (item, args.openfile_fallback))
                 else:
                     contents = [definitions['definitions'][i]['desc'] for i in range(len(definitions['definitions']))]
     elif protocol == 'sqlite':
         protocol_re = "(\w+)://([\w./]+)/d:(%s):(\w+):(\w+):(\w+)"
-        (protocol, filename, what, table, column, key) = re.findall(protocol_re, settings['openfile_fallback'])[0]
+        (protocol, filename, what, table, column, key) = re.findall(protocol_re, args.openfile_fallback)[0]
         fallback = sqlite3.connect(filename)
         t = (item,)
         sql = 'select %(column)s from %(table)s where %(key)s=?;' % {
@@ -644,7 +590,7 @@ def openfile_fallback(item, pre=True):
         for row in fallback.execute(sql, t):
             contents.append(row[0])
         if not contents:
-            contents.append('No results found for %s at %s' % (item, settings['openfile_fallback']))
+            contents.append('No results found for %s at %s' % (item, args.openfile_fallback))
         fallback.close()
 
     if pre:
@@ -663,7 +609,7 @@ def read_df_output():
     cmd = 'LC_ALL=C /bin/df -k'
 
     df = Tree(last_read=time.time())
-    if not settings['bytes']:
+    if args.non_disk:
         # No disc statistcs make sense for arbitrary tres
         return df
 
@@ -681,7 +627,7 @@ def read_df_output():
     lines = out.split('\n')
     for line in lines:
         (filesystem, size, used, available, percent, mounted_on) = line.split(None, 5)
-        if size.isdigit() and filesystem not in settings['ignore_filesystems']:
+        if size.isdigit() and filesystem not in args.ignore_filesystems:
             if mounted_on == '/':
                 # Special case: the root filesystem.  We'll change its
                 # name to 'root' to be alphanumeric and follow the
@@ -715,7 +661,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     dirpath = dirpath.rstrip(read_from_disk)
 
     names = list(directory.keys())
-    if settings['VersionSort']:
+    if args.version_sort:
         names.sort(key=version_key)
     else:
         names.sort()
@@ -758,7 +704,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
                        'style': style,
                        'name': name_stripped,
                        'read_from_disk': read_from_disk,
-                       'read_from_disk_tip': settings['read_from_disk_tip'],
+                       'read_from_disk_tip': args.read_from_disk_tip,
                        'filesize': human_readable(filesize).replace(' ',
                                                                     '&nbsp;')
                        })
@@ -781,7 +727,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
                            {'href': href,
                             'parent': parent,
                             })
-    if settings['verbose']:
+    if args.verbose:
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
         directory = du.getChildren('/')
@@ -792,7 +738,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
         filesize = du[dirpath.rstrip(read_from_disk)][0]
     breadcrumbs.append(' <span class="filesize"><a href="%(href)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>' %
                        {'href': read_from_disk,
-                        'read_from_disk_tip': settings['read_from_disk_tip'],
+                        'read_from_disk_tip': args.read_from_disk_tip,
                         'filesize': human_readable(filesize),
                         })
     breadcrumb = sep.join(breadcrumbs)
@@ -807,8 +753,8 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
 </form>
 </p>
 ''' % ({'search': search,
-        'search_tip': settings['search_tip'],
-        'checkbox_tip': settings['checkbox_tip']
+        'search_tip': args.search_tip,
+        'checkbox_tip': args.checkbox_tip
         })
 
     footer += '\n <div class="stale_info">Page generated by <a href="/?dircloud=credits">dircloud</a></div>'
@@ -968,7 +914,7 @@ def human_readable(size, format='%.1f'):
     if size is None:
         return ''
 
-    if not settings['bytes']:
+    if args.non_disk:
         return thousands_separator(size)
 
     jump = 1024
@@ -1000,8 +946,8 @@ def html_head(title='Dircloud', title_href='/', dirpath='', breadcrumb=''):
         'dirpath': dirpath,
         'breadcrumb': breadcrumb,
         'css': get_css(),
-        'logo_href': settings['logo_href'],
-        'logo_img': settings['logo_img'],
+        'logo_href': args.logo_href,
+        'logo_img': args.logo_img,
         })
 
 
@@ -1153,34 +1099,122 @@ def help(status):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Display the contents of a disk as wordcloud')
+    parser.add_argument('filename',
+                        help='input file, output of du command')
+
+    bottle_args = parser.add_argument_group('debugging and bottle specific options')
+    bottle_args.add_argument('--verbose',
+                             action='store_true',
+                             default=False,
+                             help='verbose mode')
+    bottle_args.add_argument('--debug',
+                             action='store_true',
+                             default=False,
+                             help='debug mode')
+    bottle_args.add_argument('--reloader',
+                             action='store_true',
+                             default=False,
+                             help='reload for each script modificacion (use with care!)')
+
+    server_args = parser.add_argument_group('web server details')
+    server_args.add_argument('--host',
+                             default='localhost',
+                             help='server name; needed when not localhost')
+    server_args.add_argument('--port',
+                             default=2010,
+                             type=int,
+                             help='port to run the embedded web server')
+    server_args.add_argument('--logo_href',
+                             default='http://localhost',
+                             help='Logo href')
+    server_args.add_argument('--logo_img',
+                             default='',
+                             help='Logo source image')
+
+    file_args = parser.add_argument_group('du file details')
+    file_args.add_argument('--du_units',
+                           type=int,
+                           default=1024,
+                           help='bytes per du block (default 1024)')
+    file_args.add_argument('--non_disk',
+                           action='store_true',
+                           default=False,
+                           help='wether we are dealing with disc data (default True)')
+
+    apache_args = parser.add_argument_group('Apache-like options (changed CamelCase to plan_old_names)')
+    apache_args.add_argument('--document_root',
+                             default='/',
+                             help='document root (default /)')
+    apache_args.add_argument('--header_name',
+                             help='file to display as header per directory, like HEADER.html for Apache')
+    apache_args.add_argument('--readme_name',
+                             help='file to display as footer per directory, like READE.html for Apache')
+    apache_args.add_argument('--version_sort',
+                             action='store_true',
+                             default=True,
+                             help='natural sort of (version) numbers within text (default True)')
+    apache_args.add_argument('--index_ignore',
+                             action='append',
+                             default=['*~'],
+                             help='file patterns to hide (default *~)')
+    apache_args.add_argument('--mimetypes',
+                             action='append',
+                             default=['.dir:text/plain',
+                                      '.info:text/plain',
+                                      '.log:text/plain',
+                                      ],
+                             help='overwrite default mimetypes for certain file extensions.')
+    apache_args.add_argument('--robots_txt',
+                             default='User-agent: *\nDisallow: *',
+                             help='robots.txt file contents (default: Disallow: * for all user agents')
+
+    search_args = parser.add_argument_group('Searching options')
+    search_args.add_argument('--search_client',
+                             choices=['locate', 'dicoclient', 'string'],
+                             default='locate',
+                             help='search client (default: locate)')
+    search_args.add_argument('--search_tip',
+                             default='Search files or directories',
+                             help='Search tip for search box')
+    search_args.add_argument('--checkbox_tip',
+                             default='Search using a regular expression',
+                             help='Checkbox tip')
+    search_args.add_argument('--read_from_disk_tip',
+                             default='Read the contents of the disc, bypassing the cache',
+                             help='Read from disk tip')
+
+    misc_args = parser.add_argument_group('Miscellaneous options')
+    misc_args.add_argument('--ignore_filesystems',
+                           action='append',
+                           default=['tmpfs', 'udev'],
+                           help='Ignore filesystems (default: tmpfs, udev)')
+    misc_args.add_argument('--update_du_with_read_from_disk',
+                           action='store_true',
+                           default=False,
+                           help='Cache filenames read from disk into du structure (default False)')
+    misc_args.add_argument('--openfile_fallback',
+                           default='',
+                           help='how to retrieve the final node (file://path/%%s, http://hostname/%%s, dict://host/d:%%s:database or sqlite://path/database.db/d:%%s:table:column:key)')
+    args = parser.parse_args()
+
+    # Import optional modules
+    if args.openfile_fallback.startswith('sqlite'):
+        import sqlite3
+
+    if args.search_client == 'dicoclient' or args.openfile_fallback.startswith('dict'):
+        try:
+            from dicoclient import DicoClient, DicoNotConnectedError
+            dico = DicoClient()
+        except:
+            args.search_client = 'locate'
+
     if 'DIRCLOUD_DEBUG' in os.environ:
-        settings['verbose'] = True
-        settings['debug'] = True
-        settings['reloader'] = True
-    debug(settings['debug'])
-    if len(sys.argv) > 1:
-        args = sys.argv[1:]
-        while args:
-            arg = args.pop(0)
-            if arg.startswith('--'):
-                if arg == '--help':
-                    help(0)
-                else:
-                    try:
-                        (key, value) = arg.split('=')
-                        key = key[2:]
-                        if key in settings:
-                            if value.isdigit():
-                                value = int(value)
-                            settings[key] = value
-                        else:
-                            print >>sys.stderr,'Unknown option: %s' % (key)
-                            help(1)
-                    except:
-                        print >>sys.stderr,'Unknown option'
-                        help(1)
-        if args:
-            settings['filename'] = arg
-    run(host = settings['host'],
-        port = settings['port'],
-        reloader = settings['reloader'])
+        args.verbose = True
+        args.debug = True
+        args.reloader = True
+    debug(args.debug)
+
+    run(host = args.host,
+        port = args.port,
+        reloader = args.reloader)

@@ -669,7 +669,16 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     # Get the size range of our directory
     fontrange = 10
     sizes = [directory[name][0] for name in directory]
-    floor = min(sizes)
+    if len(set(sizes)) == 2:
+        # If there are only two different sizes, the small font size
+        # would be 0 and the large 9, even if the two numbers are very
+        # similar (ex., 99 and 100).  To correct that behaviour,
+        # create a floor of 1 so they get a common base to be compared
+        # to.  Sizes list is first converted to a set to remove
+        # duplicates and we get only unique values.
+        floor = 1
+    else:
+        floor = min(sizes)
     ceiling = max(sizes)
     increment = (ceiling - floor) / fontrange
     if not increment:

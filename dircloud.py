@@ -672,6 +672,8 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     floor = min(sizes)
     ceiling = max(sizes)
     increment = (ceiling - floor) / fontrange
+    if not increment:
+        increment = 1
     sizeranges = []
     for i in range(fontrange):
         sizeranges.append(floor + (increment * i))

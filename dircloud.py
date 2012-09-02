@@ -355,7 +355,7 @@ def statistics_page():
 
     body.append('<p />')
 
-    filenames = args.filename.split(',')
+    filenames = args.filename
     if len(filenames) > 1:
         # When dircloud whas called with a list of comma-separated
         # input files, this form allows the end user to change fie.
@@ -372,7 +372,7 @@ def statistics_page():
         select.append('</form>')
         body.append('\n'.join(select))
     else:
-        body.append('Input file %s' % (args.filename))
+        body.append('Input file %s' % (args.filename[0]))
     body.append(' <ul>')
     body.append('  <li>updated on %s</li>' % (
                 time.strftime('%Y-%m-%d %H:%M', time.localtime(du.last_read))
@@ -425,11 +425,11 @@ def switch_file():
     '''
     global du
     filename = str(request.GET.get('filename'))
-    filenames = args.filename.split(',')
+    filenames = args.filename
     filenames.remove(filename)
     filenames.insert(0, filename)
-    args.filename = ','.join(filenames)
-    du = read_du_file_maybe(filename)
+    args.filename = filenames
+    du = read_du_file_maybe(args.filename)
     redirect('/')
     return du
 
@@ -437,7 +437,7 @@ def switch_file():
 def read_du_file_maybe(filenames):
     '''Read a du tree from disk and store as dict'''
     global du
-    filename = filenames.split(',')[0]
+    filename = filenames[0]
     mtime = os.path.getmtime(filename)
     if not du or mtime > du.last_read or filename != du.filename:
         du = Tree(filename=filename, last_read=time.time(), version_sort=args.version_sort)
@@ -1112,7 +1112,8 @@ def help(status):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Display the contents of a disk as wordcloud')
     parser.add_argument('filename',
-                        help='input file, output of du command')
+                        nargs='+',
+                        help='input file(s), output of du command or compatible ones')
 
     bottle_args = parser.add_argument_group('debugging and bottle specific options')
     bottle_args.add_argument('--verbose',

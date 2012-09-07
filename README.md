@@ -15,18 +15,32 @@ http://repo.or.cz/ gave me the inspiration and CSS magic.
 Like the original xdu (still my favourite for desktop use), you have
 to run du yourself, keeping the output in a file.
 
+As Phil Dykstra, author of xdu, rightly observed
+(http://sd.wareonearth.com/~phil/xdu/), his tool is also useful as a
+general purpose tree data display program for any input data formatted
+like the output of du.  Dircloud, having a more textual interface, is
+more appropiated for text data, such as directories or library
+catalogs.
+
+Dircloud follows bottle.py approach and it is distributed as a single
+self-contained file.  No installatacion is necessary.
+
+
 Installation
 -------------
 
 Dependecies are minimal and easily found in any Linux box.
 
 * python
+* for python <= 2.6, argparse; it is included in newer versions
 * bottle.py, the wonderful yet minimal web building framework
 * du, from GNU coreutils
 * locate, mlocate or sclocate, with a provision of using something
   else (here using dict as an example: http://dict.org)
 
-On a Debian based system, bottle.py is found in the pacakge python-bottle.
+On a Debian based system, bottle is found in the pacakge
+python-bottle.  But as bottle it just a single file, copying both in
+the same directory should be enough.
 
 
 Usage

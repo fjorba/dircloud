@@ -130,6 +130,21 @@ class Tree():
             children[name[pos:]] = self.branches[name]
         return children
 
+    def getLastDescendantName(self, name):
+        '''Look for the last value (filename) of the longest branch
+        (calculated as the branch with most path separators).
+
+        Create list of pairs (n, name) where n is the number of path
+        separators.  Get the largest value using the max() builtin,
+        that is calculates with the first, numeric value, of the
+        pairs.  As the name is the/path/name/, to isolate `name', get
+        the -2 element.
+        '''
+        names = [(child.count(sep), child) for child in self.branches if 
+                 child.startswith(name)]
+        name = max(names)
+        return name[-1].split(sep)[-2]
+
     def getBranches(self):
         names = list(self.branches)
         if self.version_sort:
@@ -171,9 +186,21 @@ def dircloud(dirpath='/'):
     elif special in ['available', 'size', 'used']:
         page = space_page(special)
     else:
-        # No special request. Create normal navigation page
         directory = {}
-        if not dirpath.endswith(read_from_disk):
+        if dirpath.endswith(read_from_disk):
+            directory = du.getChildren(dirpath.rstrip(read_from_disk))
+            if len(directory) == 1 and args.openfile_fallback:
+                # Handle shortcut for openfile_fallback case.  It is
+                # activated when the user clicks on the (number) link
+                # that appears at the right of the branch and the
+                # number is (1).  In that case, go straight to read
+                # the final node without needing to visit each
+                # descending branch.
+                name = du.getLastDescendantName(dirpath.rstrip(read_from_disk))
+                return openfile_fallback(name)
+        else:
+            # No special request.  This should be the common case.
+            # Get directory for the requested path.
             directory = du.getChildren(dirpath)
             if directory and not dirpath.endswith(sep):
                 redirect(dirpath + sep)

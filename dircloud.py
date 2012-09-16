@@ -528,14 +528,11 @@ def read_directory_from_disk(dirname):
 
 def read_file_if_exists(dirpath, filename):
     if dirpath and filename:
-        filename = os.path.join(dirpath, filename)
-        if os.path.isfile(filename):
-            try:
-                f = open(filename)
-                contents = f.read()
-                f.close()
-            except IOError:
-                contents = 'Cannot read %s' % (filename)
+        if os.path.isfile(os.path.join(dirpath, filename)):
+            if ext in args.mimetypes:
+                return static_file(filename, root=dirpath, mimetype=args.mimetypes[ext])
+            else: 
+                return static_file(filename, root=dirpath)
         else:
             contents = ''
     else:

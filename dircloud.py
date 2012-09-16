@@ -14,6 +14,7 @@ import time
 import re
 import fnmatch
 import locale
+import unicodedata
 import argparse
 from bottle import route, run, debug, redirect, request, response, static_file
 
@@ -269,8 +270,8 @@ def search():
         results = locate2html(out)
     elif args.search_client == 'string':
         if match == 'on':
-            q = q.lower()
-            lines = [line for line in du.getBranches() if line.lower().count(q)]
+            q = normalize_string(q)
+            lines = [line for line in du.getBranches() if normalize_string(line).count(q)]
         else:
             lines = [line for line in du.getBranches() if line.count(q)]
         lines.sort()
@@ -936,6 +937,33 @@ def thousands_separator(n):
             n, r = divmod(n, 1000)
             result = ',%03d%s' % (r, result)
         return '%d%s' % (n, result)
+
+
+def strip_accents(s):
+    '''Remove all kinds of diacritics, accents from string.
+
+    http://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string'''
+
+    try:
+        s = unicode(s,'utf-8')
+    except:
+        pass
+    return ''.join((c for c in unicodedata.normalize('NFD', s) \
+                        if unicodedata.category(c) != 'Mn'))
+
+
+def normalize_string(s, alphanum=False):
+    '''Strip accents and turn string lowercase.  Optionally remove non
+    alphanumeric chars.
+    '''
+
+    if alphanum:
+        s = strip_accents(s).lower()
+        s = ''.join([c if c.isalpha() or c.isdigit() else ' ' for c in s])
+        s = ' '.join(s.split())
+    else:
+        s = strip_accents(s).lower()
+    return s
 
 
 # From http://trac.edgewall.org/browser/trunk/trac/util/text.py

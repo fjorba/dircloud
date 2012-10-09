@@ -31,11 +31,12 @@ class Tree():
     some level of tolerance and self-correction for ill formed
     paths.'''
 
-    def __init__(self, filename = '', last_read=0, broken=False, version_sort=False):
+    def __init__(self, filename = '', mtime=0, atime=0, broken=False, version_sort=False):
         self.filename = filename,
         self.branches = {}
         self.empty = [0, '']
-        self.last_read = last_read
+        self.mtime = mtime
+        self.atime = atime
         self.broken = broken
         self.version_sort = version_sort
         self.non_disk = False
@@ -176,7 +177,7 @@ def dircloud(dirpath='/'):
     global du, df
     du = read_du_file_maybe(args.filename)
 
-    if not df or df.last_read < du.last_read:
+    if not df or df.atime < du.atime:
         df = read_df_output()
 
     special = request.GET.get('dircloud')
@@ -402,8 +403,8 @@ def statistics_page():
     else:
         body.append('Input file %s' % (args.filename[0]))
     body.append(' <ul>')
-    body.append('  <li>updated on %s</li>' % (
-                time.strftime('%Y-%m-%d %H:%M', time.localtime(du.last_read))
+    body.append('  <li>last modified: %s</li>' % (
+                time.strftime('%Y-%m-%d %H:%M', time.localtime(du.mtime))
                 ))
     body.append('  <li>%s directories</li>' % (thousands_separator(len(du))))
     body.append(' </ul>')
@@ -467,8 +468,8 @@ def read_du_file_maybe(filenames):
     global du
     filename = filenames[0]
     mtime = os.path.getmtime(filename)
-    if not du or mtime > du.last_read or filename != du.filename:
-        du = Tree(filename=filename, last_read=time.time(), version_sort=args.version_sort)
+    if not du or mtime > du.atime or filename != du.filename:
+        du = Tree(filename=filename, mtime=mtime, atime=time.time(), version_sort=args.version_sort)
         du_units = args.du_units
         f = open(filename)
         for line in f:
@@ -633,7 +634,7 @@ def read_df_output():
 
     cmd = 'LC_ALL=C /bin/df -k'
 
-    df = Tree(last_read=time.time())
+    df = Tree(mtime=time.time(), atime=time.time())
     if args.non_disk:
         # No disc statistcs make sense for arbitrary tres
         return df

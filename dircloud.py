@@ -25,7 +25,7 @@ else:
 
 
 class Tree():
-    '''Simple tree structure, modeled after the du output.
+    '''Simple tree structure, modelled after the du output.
 
      The tree is structured as follows: each path (parent) knows the
      relative names and values (size and, optionally, date) of their
@@ -79,8 +79,10 @@ class Tree():
             self.branches[parent] = []
         return (parent, child)
 
-    def addBranch(self, name, values):
+    def addBranch(self, name, values, is_directory=True):
         (parent, child) = self.splitParentChild(name)
+        if not is_directory:
+            child = child.rstrip(sep)
         values = [child, values[0], values[1]]
         self.branches[parent].append(values)
         self.branches[parent].sort()
@@ -157,10 +159,10 @@ class Tree():
             name = self._normpath(name)
         if not name in self.branches:
             name += sep
-        children = {}
+        children = []
         if name in self.branches:
             for i in range(len(self.branches[name])):
-                children[self.branches[name][i][0]] = [self.branches[name][i][1], self.branches[name][i][2]]
+                children.append(self.branches[name][i])
         return children
 
     def getLastDescendantName(self, name):
@@ -227,7 +229,7 @@ def dircloud(dirpath='/'):
     elif special in ['available', 'size', 'used']:
         page = space_page(special)
     else:
-        directory = {}
+        directory = []
         if dirpath.endswith(read_from_disk):
             if args.non_disk:
                 directory = du.getChildren(dirpath.rstrip(read_from_disk))
@@ -532,17 +534,21 @@ def read_directory_from_disk(dirname):
     '''Read a directory from disk and return a dict with filenames and sizes'''
     if args.verbose:
         print >>sys.stderr, 'Reading %s fromdisk' % (dirname)
-    directory = {}
-    ignored = []
     global du
+
+    children = du.getChildren(dirname)
+    known_children = set([child[0] for child in children])
 
     if not os.path.isdir(dirname):
         dirname = sep + dirname
     filenames = os.listdir(dirname)
+
+    ignored = []
     for ignore in args.index_ignore:
         ignored.extend(fnmatch.filter(filenames, ignore))
     ignored = set(ignored)
 
+    directory = []
     for filename in filenames:
         if filename in ignored:
             continue
@@ -558,14 +564,15 @@ def read_directory_from_disk(dirname):
             if du.getBranch(dirpath):
                 # We prefer the size of the contents, not the direntry
                 size = du.getBranchSize(dirpath)
-        directory[filename] = [size, mtime]
+        directory.append([filename, size, mtime])
         if args.update_du_with_read_from_disk:
-            if not dirpath in du:
+            if not filename in known_children:
                 if args.verbose:
                     print >>sys.stderr,'updating du[%s] with size %s' % (dirpath,
                                                                          size)
-                du[dirpath] = [size, mtime]
+                du.addBranch(dirpath, [size, mtime], is_directory=False)
 
+    directory.sort()
     return directory
 
 
@@ -725,17 +732,9 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     if not directory:
         return ''
 
-    dirpath = dirpath.rstrip(read_from_disk)
-
-    names = list(directory.keys())
-    if args.version_sort:
-        names.sort(key=version_key)
-    else:
-        names.sort()
-
     # Get the size range of our directory
     fontrange = 10
-    sizes = [directory[name][0] for name in directory]
+    sizes = [entry[1] for entry in directory]
     if len(set(sizes)) == 2:
         # If there are only two different sizes, the small font size
         # would be 0 and the large 9, even if the two numbers are very
@@ -757,8 +756,8 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     cloud = []
     cloud.append('<div id="htmltagcloud">')
 
-    for name in names:
-        (filesize, mtime) = directory[name]
+    for entry in directory:
+        (name, filesize, mtime) = entry
         if strip_trailing_slash:
             name = name.rstrip('/')
         if min(sizes) == max(sizes):

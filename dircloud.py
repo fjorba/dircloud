@@ -25,16 +25,35 @@ else:
 
 
 class Tree():
-    '''Simple tree structure, modeled after the du output.  Branches
-    names are just paths (strings), and values a tuple of a numeric
-    value (filesize) and an optional string (timestamp).  It provides
-    some level of tolerance and self-correction for ill formed
-    paths.'''
+    '''Simple tree structure, modeled after the du output.
+
+     The tree is structured as follows: each path (parent) knows the
+     relative names and values (size and, optionally, date) of their
+     children as a three value tuple, but not about itself nor their
+     grandchildren.  If the children have grandchildren, those
+     children have the full path as name, and the relative names of
+     the children, keep their data.  Finally, if there are no
+     descendants, there is no specific node for the child.  To
+     retrieve it, we must go to their parent.  In a typical Unix
+     directory tree, '/' will have 'bin/', 'boot/', 'lib/',
+     etc. values as children.  But '/' values are stored in the ''
+     node.  For example:
+
+     {'': [['/', 40546582, '2012-01-19 04:14']],
+      '/': [['bin/', 5148672, '2012-06-23 08:51'],
+            ['boot/', 44019712, '2012-08-23 07:28'],
+            [...]]
+      'boot/': [['grub/', 4616192, '2012-08-23 07:28']],
+      'boot/grub/': [['locale/', 409600, '2011-10-15 08:23']],
+      }
+
+     It provides some level of tolerance and self-correction for ill
+     formed paths.'''
 
     def __init__(self, filename = '', mtime=0, atime=0, broken=False, version_sort=False):
-        self.filename = filename,
+        self.filename = filename
         self.branches = {}
-        self.empty = [0, '']
+        self.empty = ['', 0, '']
         self.mtime = mtime
         self.atime = atime
         self.broken = broken
@@ -47,8 +66,24 @@ class Tree():
     def __getitem__(self, name):
         return self.getBranch(name)
 
+    def splitParentChild(self, name):
+        '''Split a path between parent and child'''
+        if name == sep:
+            parent = ''
+            child = sep
+        else:
+            (parent, child) = os.path.split(name.rstrip(sep))
+            parent += sep
+            child += sep
+        if not parent in self.branches:
+            self.branches[parent] = []
+        return (parent, child)
+
     def addBranch(self, name, values):
-        self.branches[name] = values
+        (parent, child) = self.splitParentChild(name)
+        values = [child, values[0], values[1]]
+        self.branches[parent].append(values)
+        self.branches[parent].sort()
         if self.broken:
             # Add values to parents
             value = values[0]
@@ -72,41 +107,45 @@ class Tree():
                 parent = self.getParentName(parent)
 
     def sumToBranch(self, name, value):
-        if not name in self.branches:
-            name = self._normpath(name)
-        self.branches[name][0] += value
+        (parent, child) = self.splitParentChild(name)
+        if not parent in self.branches:
+            self.branches[parent] = [child, 0, '']
+        if parent in self.branches:
+            for i in range(len(self.branches[parent])):
+                if self.branches[parent][i][0] == child:
+                    self.branches[parent][i][1] += value
 
     def getBranch(self, name):
-        if name in self.branches:
-            return self.branches[name]
-        else:
+        if not name:
+            name = '/'
+        (parent, child) = self.splitParentChild(name)
+        if not parent in self.branches:
             name = self._normpath(name)
-            if name in self.branches:
-                return self.branches[name]
-            else:
-                return self.empty
+        if parent in self.branches:
+            for i in range(len(self.branches[parent])):
+                if self.branches[parent][i][0] == child:
+                    return self.branches[parent][i]
+        else:
+            return self.empty
+
+    def getBranchSize(self, name):
+        values = self.getBranch(name)
+        return values[1]
 
     def getParentName(self, name):
         if not name in self.branches:
             name = self._normpath(name)
-        name = name.rstrip(sep)
-        n = name.count(sep)
-        if n:
-            parent = sep.join(name.split(sep)[:n]) + sep
-            if self.broken and not parent in self.branches:
-                values = self.getBranch(name)
-                self.addBranch(parent, values)
-            return parent
-        else:
-            return ''
+        (parent, child) = self.splitParentChild(name)
+        return parent
 
     def delBranch(self, name):
         if not name in self.branches:
             name = self._normpath(name)
         if name in self.branches:
-            # First, substact values to parents
-            values = self.getBranch(name)
-            value = -values[0]
+            (parent, child) = self.splitParentChild(name)
+            for i in range(len(self.branches[parent])):
+                if self.branches[parent][i][0] == child:
+                    value = -self.branches[parent][i][1]
             parent = self.getParentName(name)
             while parent:
                 self.sumToBranch(parent, value)
@@ -116,20 +155,12 @@ class Tree():
     def getChildren(self, name):
         if not name in self.branches:
             name = self._normpath(name)
-        if name in ('', '/'):
-            pos = 0
-            names = [child for child in self.branches if (
-                    child.count(sep) == 1)]
-            if sep in names:
-                names.remove(sep)
-        else:
-            pos = len(name)
-            n = name.count(sep) + 1
-            names = [child for child in self.branches if (
-                    child.startswith(name) and child.count(sep) == n)]
+        if not name in self.branches:
+            name += sep
         children = {}
-        for name in names:
-            children[name[pos:]] = self.branches[name]
+        if name in self.branches:
+            for i in range(len(self.branches[name])):
+                children[self.branches[name][i][0]] = [self.branches[name][i][1], self.branches[name][i][2]]
         return children
 
     def getLastDescendantName(self, name):
@@ -142,18 +173,26 @@ class Tree():
         pairs.  As the name is the/path/name/, to isolate `name', get
         the -2 element.
         '''
-        names = [(child.count(sep), child) for child in self.branches if 
+
+        branches = self.getBranches()
+        names = [(child.count(sep), child) for child in branches if
                  child.startswith(name)]
         name = max(names)
         return name[-1].split(sep)[-2]
 
-    def getBranches(self):
-        names = list(self.branches)
-        if self.version_sort:
-            names.sort(key=version_key)
-        else:
-            names.sort()
-        return names
+    def getBranches(self, sort=True):
+        '''Get a list of all branches names, including leaf nodes'''
+        branches = []
+        for parent in self.branches:
+            children = self.getChildren(parent)
+            for child in children:
+                branches.append(os.path.join(parent, child))
+        if sort:
+            if self.version_sort:
+                branches.sort(key=version_key)
+            else:
+                branches.sort()
+        return branches
 
     def _normpath(self, name):
         if name in self.branches:
@@ -190,7 +229,10 @@ def dircloud(dirpath='/'):
     else:
         directory = {}
         if dirpath.endswith(read_from_disk):
-            directory = du.getChildren(dirpath.rstrip(read_from_disk))
+            if args.non_disk:
+                directory = du.getChildren(dirpath.rstrip(read_from_disk))
+            else:
+                directory = read_directory_from_disk(dirpath.rstrip(read_from_disk))
             if len(directory) == 1 and args.openfile_fallback:
                 # Handle shortcut for openfile_fallback case.  It is
                 # activated when the user clicks on the (number) link
@@ -208,7 +250,7 @@ def dircloud(dirpath='/'):
                 redirect(dirpath + sep)
         if directory:
             entries = len(directory)
-            total_size = sum([directory[name][0] for name in directory])
+            total_size = du.getBranchSize(dirpath.rstrip(read_from_disk))
             header = '<div class="stale_info">%s directories, <a href="/?dircloud=statistics">%s</a></div>' % (entries, human_readable(total_size))
             footer = ''
         else:
@@ -464,7 +506,7 @@ def switch_file():
 
 
 def read_du_file_maybe(filenames):
-    '''Read a du tree from disk and store as dict'''
+    '''Read a du tree from disk and store as Tree object'''
     global du
     filename = filenames[0]
     mtime = os.path.getmtime(filename)
@@ -483,8 +525,6 @@ def read_du_file_maybe(filenames):
             values = [size, mtime]
             du.addBranch(name, values)
         f.close()
-        if du.getBranch(sep):
-            du.delBranch(sep)
     return du
 
 
@@ -496,6 +536,8 @@ def read_directory_from_disk(dirname):
     ignored = []
     global du
 
+    if not os.path.isdir(dirname):
+        dirname = sep + dirname
     filenames = os.listdir(dirname)
     for ignore in args.index_ignore:
         ignored.extend(fnmatch.filter(filenames, ignore))
@@ -514,9 +556,8 @@ def read_directory_from_disk(dirname):
             filename += sep
             dirpath += sep
             if du.getBranch(dirpath):
-                # We prefer the size of the contents, no the direntry
-                values = du.getBranch(dirpath)
-                size = values[0]
+                # We prefer the size of the contents, not the direntry
+                size = du.getBranchSize(dirpath)
         directory[filename] = [size, mtime]
         if args.update_du_with_read_from_disk:
             if not dirpath in du:
@@ -533,7 +574,7 @@ def read_file_if_exists(dirpath, filename):
         if os.path.isfile(os.path.join(dirpath, filename)):
             if ext in args.mimetypes:
                 return static_file(filename, root=dirpath, mimetype=args.mimetypes[ext])
-            else: 
+            else:
                 return static_file(filename, root=dirpath)
         else:
             contents = ''
@@ -768,11 +809,11 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
         print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
     if dirpath in ('',  '/', read_from_disk):
         directory = du.getChildren('/')
-        filesize = sum([directory[name][0] for name in directory])
+        filesize = du.getBranchSize('/')
         if dirpath in ('', read_from_disk):
             dirpath = sep
     else:
-        filesize = du[dirpath.rstrip(read_from_disk)][0]
+        filesize = du.getBranchSize(dirpath.rstrip(read_from_disk))
     breadcrumbs.append(' <span class="filesize"><a href="%(href)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>' %
                        {'href': read_from_disk,
                         'read_from_disk_tip': args.read_from_disk_tip,

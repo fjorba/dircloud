@@ -8,6 +8,8 @@
 #
 # Released under GPLv3 or later
 
+from __future__ import print_function
+
 import sys
 import os
 import time
@@ -536,7 +538,7 @@ def read_du_file_maybe(filenames):
 def read_directory_from_disk(dirname):
     '''Read a directory from disk and return a dict with filenames and sizes'''
     if args.verbose:
-        print >>sys.stderr, 'Reading %s fromdisk' % (dirname)
+        print('Reading %s from disk' % (dirname), file=sys.stderr)
     global du
 
     children = du.getChildren(dirname)
@@ -571,8 +573,8 @@ def read_directory_from_disk(dirname):
         if args.update_du_with_read_from_disk:
             if not filename in known_children:
                 if args.verbose:
-                    print >>sys.stderr,'updating du[%s] with size %s' % (dirpath,
-                                                                         size)
+                    print('updating du[%s] with size %s' % (dirpath, size),
+                          file=sys.stderr)
                 du.addBranch(dirpath, [size, mtime], is_directory=False)
 
     directory.sort()
@@ -808,7 +810,7 @@ def make_html_page(dirpath='', header='', search='', body='', footer=''):
                             'parent': parent,
                             })
     if args.verbose:
-        print >>sys.stderr, 'dirpath = [%s]' % (dirpath)
+        print('dirpath = [%s]' % (dirpath), file=sys.stderr)
     if dirpath in ('',  '/', read_from_disk):
         directory = du.getChildren('/')
         filesize = du.getBranchSize('/')
@@ -989,7 +991,7 @@ def strip_accents(s):
     http://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string'''
 
     try:
-        s = unicode(s,'utf-8')
+        s = unicode(s, 'utf-8')
     except:
         pass
     return ''.join((c for c in unicodedata.normalize('NFD', s) \
@@ -1201,7 +1203,7 @@ def help(status):
     for key in settings:
         out.append('  --%s' % key)
     out.sort()
-    print >>sys.stderr,'\n'.join(out)
+    print('\n'.join(out), file=sys.stderr)
     sys.exit(status)
 
 

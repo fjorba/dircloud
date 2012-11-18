@@ -165,7 +165,7 @@ class Tree():
                 children.append(self.branches[name][i])
         return children
 
-    def getLastDescendantName(self, name):
+    def getLastDescendantName(self, branch):
         '''Look for the last value (filename) of the longest branch
         (calculated as the branch with most path separators).
 
@@ -176,19 +176,22 @@ class Tree():
         the -2 element.
         '''
 
-        branches = self.getBranches()
-        names = [(child.count(sep), child) for child in branches if
-                 child.startswith(name)]
+        branches = self.getBranchNames(branch)
+        names = [(child.count(sep), child) for child in branches]
         name = max(names)
         return name[-1].split(sep)[-2]
 
-    def getBranches(self, sort=True):
-        '''Get a list of all branches names, including leaf nodes'''
+    def getBranchNames(self, branch='', sort=True):
+        '''Get a list of all branches names, starting with named
+        branch, including leaf nodes'''
+
         branches = []
         for parent in self.branches:
-            children = self.getChildren(parent)
-            for child in children:
-                branches.append(os.path.join(parent, child))
+            if not branch or parent.startswith(branch):
+                children = self.getChildren(parent)
+                for child in children:
+                    branches.append(os.path.join(parent, child[0]))
+
         if sort:
             if self.version_sort:
                 branches.sort(key=version_key)
@@ -316,9 +319,9 @@ def search():
     elif args.search_client == 'string':
         if match == 'on':
             q = normalize_string(q)
-            lines = [line for line in du.getBranches() if normalize_string(line).count(q)]
+            lines = [line for line in du.getBranchNames() if normalize_string(line).count(q)]
         else:
-            lines = [line for line in du.getBranches() if line.count(q)]
+            lines = [line for line in du.getBranchNames() if line.count(q)]
         lines.sort()
         out = '\n'.join(lines)
         results = locate2html(out)

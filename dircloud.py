@@ -8,7 +8,7 @@
 #
 # Released under GPLv3 or later
 
-from __future__ import print_function
+from __future__ import print_function, division
 
 import sys
 import os
@@ -751,7 +751,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
     else:
         floor = min(sizes)
     ceiling = max(sizes)
-    increment = (ceiling - floor) / fontrange
+    increment = int(round((ceiling - floor) / fontrange))
     if not increment:
         increment = 1
     sizeranges = []
@@ -766,7 +766,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         if strip_trailing_slash:
             name = name.rstrip('/')
         if min(sizes) == max(sizes):
-            fontsize = fontrange // 2
+            fontsize = 2
         else:
             for fontsize in range(len(sizeranges)):
                 if sizeranges[fontsize] >= filesize:

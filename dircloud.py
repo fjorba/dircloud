@@ -101,7 +101,7 @@ class Tree():
             name = self._normpath(name)
         old_value = self.branch[name][0]
         new_value = values[0]
-        diff = old - new
+        diff = old_value - new_value
         self.branches[name] = values
         if self.broken:
             # Sync values to parents
@@ -584,6 +584,7 @@ def read_directory_from_disk(dirname):
 def read_file_if_exists(dirpath, filename):
     if dirpath and filename:
         if os.path.isfile(os.path.join(dirpath, filename)):
+            ext = os.path.splitext(filename)[-1]
             if ext in args.mimetypes:
                 return static_file(filename, root=dirpath, mimetype=args.mimetypes[ext])
             else:
@@ -1196,15 +1197,6 @@ span.filesize { font-size: 9px; }
 span.filesize a { text-decoration: none; }
 </style>
 '''
-
-
-def help(status):
-    out = []
-    for key in settings:
-        out.append('  --%s' % key)
-    out.sort()
-    print('\n'.join(out), file=sys.stderr)
-    sys.exit(status)
 
 
 if __name__ == '__main__':

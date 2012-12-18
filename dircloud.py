@@ -739,9 +739,8 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         return ''
 
     # Get the size range of our directory
-    fontrange = 10
-    sizes = [entry[1] for entry in directory]
-    if len(set(sizes)) == 2:
+    filesizes = [entry[1] for entry in directory]
+    if len(set(filesizes)) == 2:
         # If there are only two different sizes, the small font size
         # would be 0 and the large 9, even if the two numbers are very
         # similar (ex., 99 and 100).  To correct that behaviour,
@@ -750,15 +749,32 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         # duplicates and we get only unique values.
         floor = 1
     else:
-        floor = min(sizes)
-    ceiling = max(sizes)
-    increment = int(round((ceiling - floor) / fontrange))
-    if not increment:
-        increment = 1
-    sizeranges = []
-    for i in range(fontrange):
-        sizeranges.append(floor + (increment * i))
+        floor = min(filesizes)
+    ceiling = max(filesizes)
 
+    # Assign a fontsize to each filesize
+    fontrange = 10
+    fontsizes = {}
+    if ceiling == floor:
+       fontsizes[ceiling] = 3
+    elif ceiling <= fontrange:
+        scale = fontrange / ceiling
+        for filesize in filesizes:
+            fontsizes[filesize] = int(round((filesize * scale) - 1))
+    else:
+        increment = (ceiling - floor) / fontrange
+        if not increment:
+            increment = 1
+        sizeranges = []
+        for i in range(fontrange):
+            sizeranges.append(int(round(floor + (increment * i))))
+        for filesize in set(filesizes):
+            for i in range(len(sizeranges)):
+                if sizeranges[i] >= filesize:
+                    break
+            fontsizes[filesize] = i
+
+    # Build html cloud
     cloud = []
     cloud.append('<div id="htmltagcloud">')
 
@@ -766,12 +782,6 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         (name, filesize, mtime) = entry
         if strip_trailing_slash:
             name = name.rstrip('/')
-        if min(sizes) == max(sizes):
-            fontsize = 2
-        else:
-            for fontsize in range(len(sizeranges)):
-                if sizeranges[fontsize] >= filesize:
-                    break
         if name.endswith(sep):
             style = ''
             name_stripped = name.rstrip(sep)
@@ -781,7 +791,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
             style = 'style="font-style: italic;"'
             name_stripped = name
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
-                     { 'fontsize': fontsize,
+                     { 'fontsize': fontsizes[filesize],
                        'title': mtime,
                        'href': prefix + name,
                        'style': style,

@@ -136,6 +136,35 @@ class Tree():
         values = self.getBranch(name)
         return values[1]
 
+    def getBranchTimestamp(self, name):
+        '''Get timestamp value, if found, of a branch.
+
+        To retrieve filestamp we must go back to the parent branch
+        (dirname).
+        '''
+        timestamp = ''
+        (parent, child) = self.splitParentChild(name)
+        if parent in self.branches:
+            for i in range(len(self.branches[parent])):
+                if self.branches[parent][i][0] == child:
+                    timestamp = self.branches[parent][i][2]
+        return timestamp
+
+    def getBranchKey(self, name):
+        '''Get branch key.
+
+        For arbitrary trees where value has to be looked up in an
+        external source specified in openfile_fallback, key may be in
+        two places: timestamp field and leaf node.  Only the first
+        found option is considered.
+        '''
+        timestamp = du.getBranchTimestamp(name)
+        if timestamp:
+            key = timestamp
+        else:
+            key = name.split(sep)[-2]
+        return key
+
     def getParentName(self, name):
         if not name in self.branches:
             name = self._normpath(name)
@@ -167,21 +196,20 @@ class Tree():
                 children.append(self.branches[name][i])
         return children
 
-    def getLastDescendantName(self, branch):
+    def getLastDescendantBranch(self, branch):
         '''Look for the last value (filename) of the longest branch
         (calculated as the branch with most path separators).
 
         Create list of pairs (n, name) where n is the number of path
         separators.  Get the largest value using the max() builtin,
         that is calculates with the first, numeric value, of the
-        pairs.  As the name is the/path/name/, to isolate `name', get
-        the -2 element.
+        pairs.
         '''
 
         branches = self.getBranchNames(branch)
         names = [(child.count(sep), child) for child in branches]
         name = max(names)
-        return name[-1].split(sep)[-2]
+        return name[-1]
 
     def getBranchNames(self, branch='', sort=True):
         '''Get a list of all branches names, starting with named
@@ -247,8 +275,9 @@ def dircloud(dirpath='/'):
                 # number is (1).  In that case, go straight to read
                 # the final node without needing to visit each
                 # descending branch.
-                name = du.getLastDescendantName(dirpath.rstrip(read_from_disk))
-                return openfile_fallback(name)
+                dirname = du.getLastDescendantBranch(dirpath.rstrip(read_from_disk))
+                key = du.getBranchKey(dirname)
+                return openfile_fallback(key)
         else:
             # No special request.  This should be the common case.
             # Get directory for the requested path.
@@ -263,15 +292,21 @@ def dircloud(dirpath='/'):
         else:
             if dirpath == read_from_disk:
                 dirname = args.document_root
+            elif args.non_disk:
+                dirname = dirpath.rstrip(read_from_disk)
             else:
                 dirname = args.document_root + dirpath.rstrip(read_from_disk)
             if os.path.isdir(dirname):
+                # We've found a directory that was not in the
+                # (possibly outdated) du structure.  Read it from disk
+                # and treat it as a normal branch.
                 if not dirname.endswith(sep):
                     redirect(dirname + sep)
                 directory = read_directory_from_disk(dirname)
                 header = read_file_if_exists(dirname, args.header_name)
                 footer = read_file_if_exists(dirname, args.readme_name)
             elif os.path.isfile(dirname):
+                # We've found a real file!  Display it on screen.
                 (path, filename) = os.path.split(dirname)
                 (basename, ext) = os.path.splitext(filename)
                 if ext in args.mimetypes:
@@ -279,8 +314,11 @@ def dircloud(dirpath='/'):
                 else:
                     return static_file(filename, root=path)
             elif args.openfile_fallback:
-                filename = dirname.split(sep)[-2]
-                return openfile_fallback(filename)
+                # Not found as du branch, nor disk directory nor file.
+                # If there is a openfile_fallback parameter, get the
+                # key an retrieve the results.
+                key = du.getBranchKey(dirname)
+                return openfile_fallback(key)
             else:
                 return 'Unknown %s' % (dirname)
 

@@ -812,6 +812,27 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
                     break
             fontsizes[filesize] = i
 
+    # If the entries happen to make a continuous set of numeric values
+    # and another one of non-numeric values, split the cloud in two
+    # parts, to make a clear visual difference between them.
+    split_cloud = ''
+    changes = 0
+    previous_type = type(None)
+    for entry in directory:
+        name = entry[0]
+        if name.rstrip(sep).isdigit():
+            if previous_type != type(0):
+                changes += 1
+            previous_type = type(0)
+        else:
+            if previous_type != type(''):
+                changes += 1
+            previous_type = type('')
+        if changes == 2 and not split_cloud:
+            split_cloud = name
+        elif changes > 2:
+            split_cloud = ''
+
     # Build html cloud
     cloud = []
     cloud.append('<div id="htmltagcloud">')
@@ -828,6 +849,8 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         else:
             style = 'style="font-style: italic;"'
             name_stripped = name
+        if split_cloud == name:
+            cloud.append('<hr />')
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsizes[filesize],
                        'title': mtime,
@@ -1146,6 +1169,14 @@ img.avatar {
 
 a.list img.avatar {
 	border-style: none;
+}
+
+hr {
+	border: 0;
+	height: 1px;
+	color: #d9d8d1;
+	background-color: #d9d8d1;
+	width: 80%;
 }
 
 div.page_header {

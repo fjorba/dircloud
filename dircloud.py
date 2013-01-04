@@ -854,7 +854,7 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsizes[filesize],
                        'title': mtime,
-                       'href': prefix + name,
+                       'href': minimal_url_quote(prefix + name),
                        'style': style,
                        'name': name_stripped,
                        'read_from_disk': read_from_disk,
@@ -1130,6 +1130,20 @@ def html_head(title='Dircloud', title_href='/', dirpath='', breadcrumb=''):
         'logo_href': args.logo_href,
         'logo_img': args.logo_img,
         })
+
+
+def minimal_url_quote(s):
+    '''Minimal version of url_quote that changes only special characters.
+
+    According to RFC 2396 Uniform Resource Identifiers (URI), the
+    following characters are reserved: ; / ? : @ & = + $ ,
+
+    However, modern navigation with a proper i18n setup allows most
+    human textual characters.
+    '''
+
+    s = s.replace('?', '%3F').replace('"', '%22').replace('&', '%26')
+    return s
 
 
 def get_css():

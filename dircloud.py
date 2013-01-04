@@ -850,7 +850,9 @@ def make_cloud(dirpath, directory, prefix='', strip_trailing_slash=False):
             style = 'style="font-style: italic;"'
             name_stripped = name
         if split_cloud == name:
+            cloud.append('<p />')
             cloud.append('<hr />')
+            cloud.append('<p />')
         cloud.append(' <span class="tagcloud%(fontsize)s" title="%(title)s"><a %(style)s href="%(href)s">%(name)s</a></span>\n <span class="filesize"><a %(style)s href="%(href)s%(read_from_disk)s" title="%(read_from_disk_tip)s">(%(filesize)s)</a></span>\n' %
                      { 'fontsize': fontsizes[filesize],
                        'title': mtime,
